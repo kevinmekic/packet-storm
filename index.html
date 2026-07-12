@@ -1,0 +1,1049 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <meta name="theme-color" content="#02070c" />
+  <title>PACKET STORM — Live Cyber Defense</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #02070c;
+      --panel: rgba(4, 13, 20, .78);
+      --panel-strong: rgba(5, 17, 26, .94);
+      --line: rgba(105, 225, 255, .16);
+      --line-hot: rgba(91, 232, 255, .58);
+      --cyan: #52e7ff;
+      --cyan-soft: #22a9c2;
+      --green: #70ffbd;
+      --red: #ff3e5f;
+      --red-soft: #bd2644;
+      --amber: #ffc857;
+      --violet: #ae78ff;
+      --text: #dff8ff;
+      --muted: #6f8e9d;
+      --shadow: 0 22px 70px rgba(0,0,0,.5);
+      --hud-gap: clamp(10px, 1vw, 16px);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--bg); }
+    body {
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-feature-settings: "tnum" 1, "ss01" 1;
+      user-select: none;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
+    #game { position: fixed; inset: 0; isolation: isolate; background: radial-gradient(circle at 50% 42%, #071a25 0, #02070c 48%, #010306 100%); }
+    #viewport, #viewport canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #viewport canvas { cursor: grab; }
+    #viewport canvas:active { cursor: grabbing; }
+
+    .scanlines, .vignette, .chromatic, #flash { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+    .scanlines {
+      opacity: .15;
+      background: repeating-linear-gradient(to bottom, rgba(255,255,255,.018) 0, rgba(255,255,255,.018) 1px, transparent 1px, transparent 4px);
+      mix-blend-mode: soft-light;
+    }
+    .vignette { background: radial-gradient(circle at 50% 45%, transparent 34%, rgba(0,3,7,.1) 60%, rgba(0,2,5,.74) 100%); }
+    .chromatic { opacity: .18; box-shadow: inset 1px 0 rgba(255,40,80,.12), inset -1px 0 rgba(31,218,255,.12); }
+    #flash { opacity: 0; background: radial-gradient(circle at 50% 50%, rgba(255,55,88,.34), transparent 63%); transition: opacity .35s ease; }
+    #flash.on { opacity: 1; transition-duration: .04s; }
+
+    .hud { position: absolute; z-index: 10; pointer-events: none; }
+    .hud button, .hud [data-interactive], .hud .interactive { pointer-events: auto; }
+    .glass {
+      background: linear-gradient(145deg, rgba(10,27,38,.78), rgba(2,9,14,.7));
+      border: 1px solid var(--line);
+      box-shadow: inset 0 1px rgba(255,255,255,.025), var(--shadow);
+      backdrop-filter: blur(16px) saturate(1.2);
+      -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    }
+
+    #topbar {
+      top: 16px; left: 18px; right: 18px; height: 62px;
+      display: grid; grid-template-columns: minmax(245px, .85fr) minmax(330px, 1.4fr) minmax(285px, .85fr);
+      align-items: center; gap: 12px;
+      padding: 0 14px; border-radius: 10px;
+      clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+    }
+    .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .brand-mark { position: relative; width: 30px; height: 30px; flex: 0 0 auto; }
+    .brand-mark::before, .brand-mark::after { content: ""; position: absolute; inset: 3px; border: 1px solid var(--cyan); transform: rotate(45deg); box-shadow: 0 0 14px rgba(82,231,255,.35); }
+    .brand-mark::after { inset: 9px; background: var(--cyan); opacity: .9; animation: corePulse 2.2s ease-in-out infinite; }
+    .brand-copy { min-width: 0; }
+    .eyebrow { color: var(--cyan); font: 700 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .23em; text-transform: uppercase; }
+    .brand h1 { margin: 3px 0 0; font-size: 15px; font-weight: 780; line-height: 1; letter-spacing: .24em; white-space: nowrap; }
+    .brand h1 span { color: var(--muted); font-weight: 540; }
+
+    .wave-strip { height: 36px; display: flex; align-items: center; gap: 10px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0 18px; min-width: 0; }
+    .wave-index { color: var(--red); font: 800 10px ui-monospace, monospace; letter-spacing: .12em; white-space: nowrap; }
+    .wave-main { min-width: 0; flex: 1; }
+    .wave-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; font: 700 11px ui-monospace, monospace; letter-spacing: .13em; text-transform: uppercase; }
+    .wave-title span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wave-clock { color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .wave-track { position: relative; height: 2px; margin-top: 7px; overflow: hidden; background: rgba(255,255,255,.08); }
+    .wave-track i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--red)); box-shadow: 0 0 10px var(--cyan); transition: width .2s linear; }
+
+    .top-stats { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+    .stat { padding-right: 14px; border-right: 1px solid var(--line); text-align: right; }
+    .stat:last-of-type { border-right: 0; padding-right: 0; }
+    .stat-label { color: var(--muted); font: 650 8px/1.1 ui-monospace, monospace; letter-spacing: .18em; text-transform: uppercase; }
+    .stat-value { margin-top: 4px; font: 780 15px/1 ui-monospace, monospace; letter-spacing: .05em; }
+    .stat-value.good { color: var(--green); text-shadow: 0 0 15px rgba(112,255,189,.35); }
+    .icon-btn { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 6px; background: rgba(10,29,39,.7); cursor: pointer; transition: .2s ease; }
+    .icon-btn:hover { border-color: var(--line-hot); color: var(--cyan); background: rgba(24,74,91,.4); }
+    .icon-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+
+    #left-rail { top: 94px; left: 18px; width: 232px; bottom: 126px; display: flex; flex-direction: column; gap: var(--hud-gap); }
+    #right-rail { top: 94px; right: 18px; width: 264px; bottom: 126px; display: flex; flex-direction: column; gap: var(--hud-gap); }
+    .panel { position: relative; padding: 14px; border-radius: 8px; overflow: hidden; }
+    .panel::before { content: ""; position: absolute; top: 0; left: 0; width: 44px; height: 1px; background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .panel-title { font: 760 9px ui-monospace, monospace; letter-spacing: .18em; text-transform: uppercase; color: #a9cbd5; }
+    .panel-code { color: var(--muted); font: 600 8px ui-monospace, monospace; }
+
+    .telemetry { flex: 0 0 auto; }
+    .metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+    .metric { padding: 9px 8px; border: 1px solid rgba(95,211,239,.1); background: rgba(0,8,13,.44); min-height: 55px; }
+    .metric .label { color: var(--muted); font: 650 7px ui-monospace, monospace; letter-spacing: .13em; text-transform: uppercase; }
+    .metric .value { margin-top: 7px; font: 760 16px/1 ui-monospace, monospace; }
+    .metric .value small { color: var(--muted); font-size: 8px; margin-left: 2px; }
+    .metric.allowed .value { color: var(--cyan); }
+    .metric.blocked .value { color: var(--red); }
+    .spark { width: 100%; height: 38px; margin-top: 10px; display: block; }
+    .spark .gridline { stroke: rgba(82,231,255,.08); stroke-width: 1; }
+    .spark #spark-path { fill: none; stroke: var(--cyan); stroke-width: 1.5; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 4px rgba(82,231,255,.55)); }
+    .spark #spark-fill { fill: url(#sparkGradient); opacity: .38; }
+
+    .conn-panel { display: grid; grid-template-columns: 82px 1fr; align-items: center; gap: 12px; }
+    .gauge { --p: 12; position: relative; width: 78px; aspect-ratio: 1; border-radius: 50%; background: conic-gradient(var(--red) calc(var(--p) * 1%), rgba(255,255,255,.06) 0); display: grid; place-items: center; transition: background .25s linear; }
+    .gauge::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: #061019; border: 1px solid rgba(255,255,255,.06); }
+    .gauge-value { z-index: 1; text-align: center; font: 770 16px/1 ui-monospace, monospace; }
+    .gauge-value small { display: block; margin-top: 4px; color: var(--muted); font: 600 7px ui-monospace, monospace; letter-spacing: .1em; }
+    .conn-copy strong { display: block; font: 700 10px ui-monospace, monospace; letter-spacing: .08em; }
+    .conn-copy p { margin: 6px 0 0; color: var(--muted); font: 500 8px/1.55 ui-monospace, monospace; }
+
+    .services-panel { flex: 1 1 auto; min-height: 180px; }
+    .services { display: flex; flex-direction: column; gap: 9px; }
+    .service { display: grid; grid-template-columns: 31px 1fr 38px; align-items: center; gap: 8px; }
+    .service-port { color: var(--cyan); font: 700 8px ui-monospace, monospace; }
+    .service-name { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; font: 650 8px ui-monospace, monospace; letter-spacing: .06em; }
+    .service-name span:last-child { color: var(--muted); font-size: 7px; }
+    .service-bar { grid-column: 2 / 3; height: 3px; margin-top: -5px; background: rgba(255,255,255,.06); }
+    .service-bar i { display: block; width: 100%; height: 100%; background: var(--green); box-shadow: 0 0 7px rgba(112,255,189,.4); transition: width .35s ease, background .3s; }
+    .service-health { grid-column: 3; grid-row: 1 / span 2; text-align: right; color: var(--green); font: 750 9px ui-monospace, monospace; }
+    .service.scanned .service-port { color: var(--amber); text-shadow: 0 0 10px var(--amber); }
+    .service.degraded .service-bar i { background: var(--amber); }
+    .service.down .service-bar i { background: var(--red); }
+    .service.degraded .service-health { color: var(--amber); }
+    .service.down .service-health { color: var(--red); }
+
+    .threat-panel { flex: 1 1 auto; min-height: 230px; display: flex; flex-direction: column; }
+    #event-feed { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; }
+    .event { display: grid; grid-template-columns: 5px 37px 1fr; gap: 7px; align-items: start; animation: eventIn .28s ease both; }
+    .event::before { content: ""; width: 3px; height: 100%; min-height: 24px; background: var(--cyan-soft); box-shadow: 0 0 7px currentColor; }
+    .event.danger::before { background: var(--red); }
+    .event.warn::before { background: var(--amber); }
+    .event.good::before { background: var(--green); }
+    .event-time { color: var(--muted); font: 600 7px/1.35 ui-monospace, monospace; }
+    .event-copy { color: #9fb7c0; font: 550 8px/1.38 ui-monospace, monospace; }
+    .event-copy b { display: block; margin-bottom: 2px; color: #e3f9ff; font-weight: 720; letter-spacing: .04em; }
+
+    .playbook-panel { flex: 0 0 auto; }
+    .playbook { display: flex; flex-direction: column; gap: 6px; }
+    .tactic { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 8px; padding: 7px 8px; border: 1px solid rgba(255,255,255,.05); background: rgba(0,5,9,.33); }
+    .tactic-index { color: var(--muted); font: 700 8px ui-monospace, monospace; }
+    .tactic-name { font: 650 8px ui-monospace, monospace; letter-spacing: .04em; }
+    .tactic-state { width: 5px; height: 5px; border-radius: 50%; background: #314753; }
+    .tactic.active .tactic-state { background: var(--red); box-shadow: 0 0 10px var(--red); animation: blink 1s infinite; }
+    .tactic.done { opacity: .48; }
+    .tactic.done .tactic-state { background: var(--green); }
+
+    #command-deck { left: 50%; bottom: 16px; width: min(850px, calc(100vw - 570px)); transform: translateX(-50%); min-width: 590px; height: 94px; padding: 10px; border-radius: 10px; display: grid; grid-template-columns: 1.08fr 1fr 1fr 1fr auto; gap: 8px; align-items: stretch; }
+    .command { position: relative; border: 1px solid rgba(90,217,243,.15); border-radius: 6px; background: linear-gradient(150deg, rgba(13,36,47,.82), rgba(2,10,16,.88)); padding: 10px 10px 9px; text-align: left; cursor: pointer; overflow: hidden; transition: transform .15s ease, border-color .2s, background .2s; }
+    .command:hover { transform: translateY(-2px); border-color: rgba(82,231,255,.52); background: linear-gradient(150deg, rgba(20,53,67,.9), rgba(3,14,21,.94)); }
+    .command:active { transform: translateY(0); }
+    .command::after { content: ""; position: absolute; inset: auto 0 0; height: 2px; background: var(--cyan); transform: scaleX(0); transform-origin: left; transition: transform .25s ease; box-shadow: 0 0 10px currentColor; }
+    .command.active { border-color: rgba(112,255,189,.54); background: linear-gradient(150deg, rgba(19,61,55,.88), rgba(3,17,19,.94)); }
+    .command.active::after { background: var(--green); transform: scaleX(1); }
+    .command.danger.active { border-color: rgba(255,62,95,.58); background: linear-gradient(150deg, rgba(65,18,32,.9), rgba(20,5,12,.95)); }
+    .command.danger.active::after { background: var(--red); }
+    .cmd-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .cmd-key { min-width: 18px; height: 17px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.13); border-radius: 3px; color: var(--muted); font: 650 7px ui-monospace, monospace; }
+    .cmd-led { width: 6px; height: 6px; border-radius: 50%; background: #29404a; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+    .command.active .cmd-led { background: var(--green); box-shadow: 0 0 10px var(--green); }
+    .command.danger.active .cmd-led { background: var(--red); box-shadow: 0 0 10px var(--red); }
+    .cmd-title { display: block; margin-top: 10px; font: 760 9px/1 ui-monospace, monospace; letter-spacing: .08em; }
+    .cmd-sub { display: block; margin-top: 5px; color: var(--muted); font: 550 7px/1 ui-monospace, monospace; }
+    .command[disabled] { opacity: .35; cursor: not-allowed; transform: none; }
+    .command.utility .cmd-title { margin-top: 8px; }
+    .command.utility .cmd-sub { line-height: 1.35; }
+    .deck-meta { width: 64px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-left: 1px solid var(--line); color: var(--muted); }
+    .deck-meta strong { color: var(--cyan); font: 750 10px ui-monospace, monospace; }
+    .deck-meta span { margin-top: 5px; font: 600 6px ui-monospace, monospace; letter-spacing: .12em; text-align: center; }
+
+    #selection-card { position: absolute; z-index: 13; right: 300px; bottom: 126px; width: 220px; opacity: 0; transform: translateY(8px); pointer-events: none; transition: .22s ease; }
+    #selection-card.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .selection-inner { padding: 12px; border-radius: 8px; }
+    .selection-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+    .selection-type { color: var(--cyan); font: 700 7px ui-monospace, monospace; letter-spacing: .15em; text-transform: uppercase; }
+    .selection-name { margin-top: 4px; font: 760 12px ui-monospace, monospace; }
+    .selection-close { width: 22px; height: 22px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+    .selection-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+    .selection-meta div { padding: 6px; background: rgba(0,0,0,.22); }
+    .selection-meta span { display: block; color: var(--muted); font: 600 6px ui-monospace, monospace; letter-spacing: .1em; }
+    .selection-meta b { display: block; margin-top: 4px; font: 720 8px ui-monospace, monospace; }
+    #selection-action { width: 100%; margin-top: 8px; padding: 8px; border: 1px solid rgba(255,62,95,.4); border-radius: 4px; background: rgba(255,62,95,.09); color: #ff92a5; font: 720 8px ui-monospace, monospace; letter-spacing: .08em; cursor: pointer; }
+
+    #world-labels { position: absolute; inset: 0; z-index: 5; overflow: hidden; pointer-events: none; }
+    .world-label { position: absolute; transform: translate(-50%, -100%); padding: 4px 7px; border-left: 1px solid var(--cyan); background: linear-gradient(90deg, rgba(2,13,19,.83), rgba(2,13,19,.18)); color: #bcecf4; font: 650 7px/1 ui-monospace, monospace; letter-spacing: .09em; white-space: nowrap; opacity: .78; transition: opacity .2s, color .2s; text-shadow: 0 1px 3px #000; }
+    .world-label::after { content: ""; position: absolute; top: 100%; left: -1px; width: 1px; height: 9px; background: linear-gradient(var(--cyan), transparent); }
+    .world-label.infected { color: #ff8199; border-color: var(--red); }
+    .world-label.infected::after { background: linear-gradient(var(--red), transparent); }
+    .world-label.quarantined { color: var(--amber); border-color: var(--amber); }
+
+    #zone-legend { position: absolute; z-index: 7; left: 264px; top: 94px; display: flex; gap: 6px; pointer-events: none; }
+    .zone-chip { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border: 1px solid rgba(255,255,255,.08); background: rgba(2,8,13,.52); color: #7995a0; font: 650 7px ui-monospace, monospace; letter-spacing: .1em; backdrop-filter: blur(7px); }
+    .zone-chip i { width: 6px; height: 6px; border: 1px solid currentColor; background: currentColor; opacity: .7; box-shadow: 0 0 8px currentColor; }
+    .zone-chip.outside { color: #5db3ff; }
+    .zone-chip.dmz { color: #d479ff; }
+    .zone-chip.inside { color: #58f2c6; }
+
+    #toast-stack { position: absolute; z-index: 30; left: 50%; top: 92px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+    .toast { min-width: 280px; padding: 9px 16px; border: 1px solid rgba(82,231,255,.36); background: rgba(3,16,23,.9); box-shadow: 0 12px 40px rgba(0,0,0,.35), inset 3px 0 var(--cyan); color: #c9edf4; font: 650 8px ui-monospace, monospace; letter-spacing: .08em; text-align: center; animation: toastIn .3s ease, toastOut .5s ease 3.1s forwards; }
+    .toast.danger { border-color: rgba(255,62,95,.45); box-shadow: 0 12px 40px rgba(0,0,0,.35), inset 3px 0 var(--red); color: #ffafbc; }
+    .toast.good { border-color: rgba(112,255,189,.42); box-shadow: 0 12px 40px rgba(0,0,0,.35), inset 3px 0 var(--green); color: #b9ffdd; }
+
+    #wave-banner { position: absolute; z-index: 29; left: 50%; top: 47%; width: min(570px, 80vw); transform: translate(-50%, -50%) scale(.96); text-align: center; opacity: 0; pointer-events: none; transition: .35s ease; }
+    #wave-banner.visible { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    .banner-kicker { color: var(--red); font: 750 9px ui-monospace, monospace; letter-spacing: .34em; text-transform: uppercase; text-shadow: 0 0 18px currentColor; }
+    .banner-title { margin: 10px 0 0; font-size: clamp(32px, 5vw, 64px); font-weight: 850; line-height: .95; letter-spacing: .05em; text-transform: uppercase; text-shadow: 0 4px 35px rgba(0,0,0,.8), 0 0 30px rgba(255,62,95,.16); }
+    .banner-sub { margin: 12px auto 0; max-width: 450px; color: #a5bcc5; font: 560 10px/1.6 ui-monospace, monospace; }
+    .banner-line { width: 100%; height: 1px; margin-top: 16px; background: linear-gradient(90deg, transparent, var(--red), transparent); box-shadow: 0 0 14px var(--red); }
+
+    #boot { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: radial-gradient(circle at 64% 42%, rgba(12,55,70,.18), transparent 35%), linear-gradient(115deg, rgba(1,4,8,.96) 20%, rgba(1,7,12,.78) 61%, rgba(1,5,9,.92)); transition: opacity .8s ease, visibility .8s; }
+    #boot.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    #boot::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(82,231,255,.027) 1px, transparent 1px), linear-gradient(90deg, rgba(82,231,255,.027) 1px, transparent 1px); background-size: 60px 60px; mask-image: linear-gradient(to right, black, transparent 70%); }
+    .boot-shell { position: relative; width: min(1050px, calc(100vw - 60px)); min-height: 580px; display: grid; grid-template-columns: 1.08fr .92fr; border: 1px solid rgba(93,224,255,.18); background: linear-gradient(130deg, rgba(4,18,27,.9), rgba(2,8,13,.6)); box-shadow: 0 50px 120px rgba(0,0,0,.7), inset 0 1px rgba(255,255,255,.025); backdrop-filter: blur(16px); clip-path: polygon(0 0, calc(100% - 25px) 0, 100% 25px, 100% 100%, 25px 100%, 0 calc(100% - 25px)); overflow: hidden; }
+    .boot-copy { padding: clamp(42px, 5vw, 72px); display: flex; flex-direction: column; justify-content: center; }
+    .boot-class { color: var(--red); font: 750 9px ui-monospace, monospace; letter-spacing: .28em; text-transform: uppercase; }
+    .boot-title { margin: 18px 0 0; font-size: clamp(52px, 7vw, 98px); line-height: .78; font-weight: 900; letter-spacing: -.055em; text-transform: uppercase; }
+    .boot-title span { display: block; margin-left: .85em; color: transparent; -webkit-text-stroke: 1px rgba(112,230,255,.75); text-shadow: 0 0 34px rgba(82,231,255,.1); }
+    .boot-sub { max-width: 510px; margin: 24px 0 0; color: #8da8b4; font: 520 11px/1.8 ui-monospace, monospace; }
+    .boot-actions { display: flex; align-items: center; gap: 16px; margin-top: 30px; }
+    #start-btn { position: relative; min-width: 190px; padding: 14px 19px; border: 1px solid var(--cyan); background: rgba(82,231,255,.1); color: #d9faff; cursor: pointer; font: 760 9px ui-monospace, monospace; letter-spacing: .17em; text-transform: uppercase; clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 9px 100%, 0 calc(100% - 9px)); box-shadow: inset 0 0 24px rgba(82,231,255,.08); transition: .2s ease; }
+    #start-btn:hover { background: rgba(82,231,255,.2); box-shadow: 0 0 30px rgba(82,231,255,.15), inset 0 0 25px rgba(82,231,255,.12); }
+    #start-btn:disabled { opacity: .38; cursor: not-allowed; filter: grayscale(.55); }
+    .boot-hint { color: #4f6873; font: 600 7px/1.5 ui-monospace, monospace; letter-spacing: .1em; }
+    .boot-visual { position: relative; display: grid; place-items: center; background: radial-gradient(circle, rgba(21,125,153,.15), transparent 54%); overflow: hidden; }
+    .radar { position: relative; width: min(360px, 36vw); aspect-ratio: 1; border: 1px solid rgba(82,231,255,.2); border-radius: 50%; box-shadow: 0 0 90px rgba(82,231,255,.08), inset 0 0 70px rgba(82,231,255,.04); }
+    .radar::before, .radar::after { content: ""; position: absolute; inset: 12%; border: 1px solid rgba(82,231,255,.12); border-radius: 50%; }
+    .radar::after { inset: 30%; }
+    .radar-lines { position: absolute; inset: 0; background: linear-gradient(90deg, transparent 49.8%, rgba(82,231,255,.14) 50%, transparent 50.2%), linear-gradient(transparent 49.8%, rgba(82,231,255,.14) 50%, transparent 50.2%); border-radius: 50%; }
+    .radar-sweep { position: absolute; inset: -1px; border-radius: 50%; background: conic-gradient(from 25deg, transparent 0 75%, rgba(82,231,255,.32) 98%, rgba(82,231,255,.8) 100%); mask: radial-gradient(circle, transparent 0 3%, black 4%); animation: sweep 4.4s linear infinite; opacity: .55; }
+    .radar-node { position: absolute; width: 6px; height: 6px; border: 1px solid var(--cyan); background: #07131a; box-shadow: 0 0 10px var(--cyan); transform: rotate(45deg); }
+    .radar-node.n1 { left: 25%; top: 36%; }
+    .radar-node.n2 { left: 48%; top: 49%; width: 10px; height: 10px; }
+    .radar-node.n3 { left: 67%; top: 30%; }
+    .radar-node.n4 { left: 72%; top: 66%; }
+    .radar-node.n5 { left: 37%; top: 73%; }
+    .radar-attack { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--red); box-shadow: 0 0 13px var(--red); animation: ping 1.4s ease-out infinite; }
+    .radar-attack.a1 { left: 14%; top: 54%; }
+    .radar-attack.a2 { left: 83%; top: 45%; animation-delay: -.4s; }
+    .radar-attack.a3 { left: 55%; top: 14%; animation-delay: -.9s; }
+    .boot-status { position: absolute; right: 24px; bottom: 22px; left: 24px; display: flex; align-items: center; justify-content: space-between; color: #56727f; font: 650 7px ui-monospace, monospace; letter-spacing: .13em; }
+    .boot-status i { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 9px var(--green); }
+
+    #end-screen { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(1,5,8,.76); backdrop-filter: blur(12px); opacity: 0; visibility: hidden; transition: .5s ease; }
+    #end-screen.visible { opacity: 1; visibility: visible; }
+    .end-card { width: min(560px, calc(100vw - 40px)); padding: 36px; border-radius: 12px; text-align: center; }
+    .end-kicker { color: var(--green); font: 740 9px ui-monospace, monospace; letter-spacing: .25em; }
+    .end-card h2 { margin: 10px 0 0; font-size: 41px; letter-spacing: .04em; }
+    .end-score { margin-top: 18px; color: var(--cyan); font: 850 48px ui-monospace, monospace; text-shadow: 0 0 25px rgba(82,231,255,.3); }
+    .end-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 22px; }
+    .end-grid div { padding: 12px 6px; background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.05); }
+    .end-grid span { display: block; color: var(--muted); font: 650 7px ui-monospace, monospace; letter-spacing: .1em; }
+    .end-grid b { display: block; margin-top: 6px; font: 760 13px ui-monospace, monospace; }
+    #restart-btn { margin-top: 22px; padding: 11px 26px; border: 1px solid var(--cyan); background: rgba(82,231,255,.1); color: var(--text); font: 750 9px ui-monospace, monospace; letter-spacing: .13em; cursor: pointer; }
+
+    #quality-badge { position: absolute; z-index: 8; left: 265px; bottom: 26px; color: #47636e; font: 600 6px ui-monospace, monospace; letter-spacing: .1em; pointer-events: none; }
+    #quality-badge b { color: #6d929f; font-weight: 700; }
+
+    @keyframes corePulse { 0%,100%{ transform: rotate(45deg) scale(.8); opacity:.55; } 50%{ transform: rotate(45deg) scale(1.05); opacity:1; } }
+    @keyframes blink { 50% { opacity: .25; } }
+    @keyframes sweep { to { transform: rotate(360deg); } }
+    @keyframes ping { 0%{ transform:scale(.6); opacity:.3; } 38%{ opacity:1; } 100%{ transform:scale(2.3); opacity:0; } }
+    @keyframes eventIn { from { opacity:0; transform: translateX(8px); } }
+    @keyframes toastIn { from { opacity:0; transform:translateY(-8px) scale(.98); } }
+    @keyframes toastOut { to { opacity:0; transform:translateY(-8px); } }
+
+    @media (max-width: 1180px) {
+      #topbar { grid-template-columns: 220px 1fr 245px; }
+      #left-rail { width: 205px; }
+      #right-rail { width: 228px; }
+      #command-deck { width: calc(100vw - 472px); min-width: 540px; }
+      #selection-card { right: 260px; }
+      #zone-legend { left: 236px; }
+      .command { padding-inline: 8px; }
+      .cmd-sub { display: none; }
+    }
+
+    @media (max-width: 900px) {
+      #topbar { left: 10px; right: 10px; top: 10px; grid-template-columns: 1fr auto; height: 56px; }
+      .wave-strip { position: absolute; top: 66px; left: 0; width: 100%; height: 35px; background: rgba(3,13,19,.72); border: 1px solid var(--line); }
+      .top-stats .stat:first-child { display: none; }
+      #left-rail { left: 10px; top: 118px; bottom: 105px; width: 190px; }
+      #right-rail { right: 10px; top: 118px; bottom: 105px; width: 210px; }
+      .conn-panel { display: none; }
+      .playbook-panel { display: none; }
+      #command-deck { left: 10px; right: 10px; bottom: 9px; transform: none; width: auto; min-width: 0; height: 86px; grid-template-columns: repeat(4, 1fr); }
+      .deck-meta { display: none; }
+      #selection-card { right: 230px; bottom: 105px; }
+      #zone-legend, #quality-badge { display: none; }
+      .boot-shell { grid-template-columns: 1fr; min-height: 520px; }
+      .boot-visual { display: none; }
+    }
+
+    @media (max-width: 650px) {
+      #topbar { grid-template-columns: 1fr auto; }
+      .brand .eyebrow, .brand h1 span, .top-stats .stat { display: none; }
+      .brand h1 { font-size: 13px; }
+      #left-rail { top: 114px; width: 150px; bottom: 92px; }
+      #right-rail { display: none; }
+      .telemetry .panel-head, .spark, .services-panel .panel-head { display: none; }
+      .panel { padding: 8px; }
+      .metric-grid { gap: 4px; }
+      .metric { min-height: 43px; padding: 6px; }
+      .metric .value { font-size: 12px; }
+      .services { gap: 6px; }
+      .service { grid-template-columns: 26px 1fr 28px; gap: 4px; }
+      #command-deck { grid-template-columns: repeat(4, 1fr); height: 73px; padding: 6px; gap: 4px; }
+      .command { padding: 7px 5px; text-align: center; }
+      .cmd-top { justify-content: center; }
+      .cmd-key { display: none; }
+      .cmd-title { font-size: 7px; margin-top: 7px; }
+      #selection-card { right: 10px; bottom: 91px; }
+      .boot-shell { width: calc(100vw - 24px); }
+      .boot-copy { padding: 35px 26px; }
+      .boot-title { font-size: 52px; }
+      .boot-actions { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+    }
+  </style>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+  </script>
+</head>
+<body>
+  <div id="game" aria-label="PACKET STORM cyber defense simulation">
+    <div id="viewport"></div>
+    <div id="world-labels" aria-hidden="true"></div>
+    <div class="scanlines"></div><div class="vignette"></div><div class="chromatic"></div><div id="flash"></div>
+
+    <header id="topbar" class="hud glass">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div class="brand-copy"><div class="eyebrow">Aegis Cyber Operations</div><h1>PACKET STORM <span>// LIVE</span></h1></div>
+      </div>
+      <div class="wave-strip">
+        <div id="wave-index" class="wave-index">WAVE 0/4</div>
+        <div class="wave-main">
+          <div class="wave-title"><span id="wave-title">Baseline traffic</span><span id="wave-clock" class="wave-clock">00:00</span></div>
+          <div class="wave-track"><i id="wave-progress"></i></div>
+        </div>
+      </div>
+      <div class="top-stats">
+        <div class="stat"><div class="stat-label">Service uptime</div><div id="uptime-value" class="stat-value good">100.00%</div></div>
+        <div class="stat"><div class="stat-label">Defense score</div><div id="score-value" class="stat-value">000000</div></div>
+        <button id="camera-btn" class="icon-btn" title="Toggle cinematic/free camera" aria-label="Toggle cinematic camera">
+          <svg viewBox="0 0 24 24"><path d="M4 7.5h3l1.4-2h7.2l1.4 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </button>
+        <button id="audio-btn" class="icon-btn" title="Mute audio" aria-label="Mute audio">
+          <svg viewBox="0 0 24 24"><path d="M4 10h4l5-4v12l-5-4H4zM16 9c1.8 1.8 1.8 4.2 0 6M18.5 6.5c3.7 3.7 3.7 7.3 0 11"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <aside id="left-rail" class="hud">
+      <section class="panel glass telemetry">
+        <div class="panel-head"><div class="panel-title">Live traffic</div><div id="telemetry-sample" class="panel-code">Δ 250ms</div></div>
+        <div class="metric-grid">
+          <div class="metric"><div class="label">Ingress</div><div class="value"><span id="pps-in">042</span><small>pps</small></div></div>
+          <div class="metric"><div class="label">Egress</div><div class="value"><span id="pps-out">037</span><small>pps</small></div></div>
+          <div class="metric allowed"><div class="label">Allowed</div><div class="value" id="allowed-count">000000</div></div>
+          <div class="metric blocked"><div class="label">Blocked</div><div class="value" id="blocked-count">000000</div></div>
+        </div>
+        <svg class="spark" viewBox="0 0 200 38" preserveAspectRatio="none" aria-hidden="true">
+          <defs><linearGradient id="sparkGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#52e7ff" stop-opacity=".5"/><stop offset="1" stop-color="#52e7ff" stop-opacity="0"/></linearGradient></defs>
+          <path class="gridline" d="M0 9.5H200M0 19H200M0 28.5H200"/>
+          <path id="spark-fill" d="M0 35 L200 35 L200 35 Z"/><path id="spark-path" d="M0 30 L200 30"/>
+        </svg>
+      </section>
+
+      <section class="panel glass conn-panel">
+        <div id="conn-gauge" class="gauge"><div class="gauge-value"><span id="conn-value">12</span>%<small>STATE TABLE</small></div></div>
+        <div class="conn-copy"><strong id="conn-state">NOMINAL</strong><p><span id="conn-open">1,226</span> / 12,000<br/>half-open sessions</p></div>
+      </section>
+
+      <section class="panel glass services-panel">
+        <div class="panel-head"><div class="panel-title">Service health</div><div class="panel-code">SLA / 99.9</div></div>
+        <div id="services" class="services"></div>
+      </section>
+    </aside>
+
+    <aside id="right-rail" class="hud">
+      <section class="panel glass threat-panel">
+        <div class="panel-head"><div class="panel-title">Threat intelligence</div><div id="threat-level" class="panel-code">LOW</div></div>
+        <div id="event-feed" aria-live="polite"></div>
+      </section>
+      <section class="panel glass playbook-panel">
+        <div class="panel-head"><div class="panel-title">Attack chain</div><div class="panel-code">MITRE / LIVE</div></div>
+        <div class="playbook">
+          <div class="tactic" data-wave="1"><div class="tactic-index">01</div><div class="tactic-name">SYN FLOOD</div><i class="tactic-state"></i></div>
+          <div class="tactic" data-wave="2"><div class="tactic-index">02</div><div class="tactic-name">SERVICE ENUM</div><i class="tactic-state"></i></div>
+          <div class="tactic" data-wave="3"><div class="tactic-index">03</div><div class="tactic-name">LATERAL MOVE</div><i class="tactic-state"></i></div>
+          <div class="tactic" data-wave="4"><div class="tactic-index">04</div><div class="tactic-name">EXFIL / C2</div><i class="tactic-state"></i></div>
+        </div>
+      </section>
+    </aside>
+
+    <nav id="command-deck" class="hud glass" aria-label="Defense controls">
+      <button id="rate-btn" class="command" aria-pressed="false"><span class="cmd-top"><i class="cmd-key">1</i><i class="cmd-led"></i></span><span class="cmd-title">RATE LIMIT</span><span class="cmd-sub">SYN / 650 pps</span></button>
+      <button id="ips-btn" class="command" aria-pressed="false"><span class="cmd-top"><i class="cmd-key">2</i><i class="cmd-led"></i></span><span class="cmd-title">ACTIVATE IPS</span><span class="cmd-sub">Inline inspection</span></button>
+      <button id="cut-btn" class="command danger" aria-pressed="false"><span class="cmd-top"><i class="cmd-key">3</i><i class="cmd-led"></i></span><span class="cmd-title">CUT LINK</span><span class="cmd-sub">Select topology link</span></button>
+      <button id="restore-btn" class="command utility"><span class="cmd-top"><i class="cmd-key">4</i><i class="cmd-led"></i></span><span class="cmd-title">RESTORE LINKS</span><span class="cmd-sub">Recalculate routes</span></button>
+      <div class="deck-meta"><strong id="quality-state">ULTRA</strong><span>ADAPTIVE<br/>RENDER</span></div>
+    </nav>
+
+    <div id="selection-card" class="hud">
+      <div class="selection-inner glass">
+        <div class="selection-top"><div><div id="selection-type" class="selection-type">Endpoint</div><div id="selection-name" class="selection-name">CLIENT-04</div></div><button id="selection-close" class="selection-close" aria-label="Close selection">×</button></div>
+        <div class="selection-meta"><div><span>ZONE</span><b id="selection-zone">INSIDE</b></div><div><span>STATE</span><b id="selection-state">HEALTHY</b></div></div>
+        <button id="selection-action">QUARANTINE HOST</button>
+      </div>
+    </div>
+
+    <div id="zone-legend"><div class="zone-chip outside"><i></i>OUTSIDE / UNTRUST</div><div class="zone-chip dmz"><i></i>DMZ / PUBLIC</div><div class="zone-chip inside"><i></i>INSIDE / TRUST</div></div>
+    <div id="quality-badge">GPU LOAD <b id="gpu-load">NOMINAL</b> · <span id="particle-count">0</span> ACTIVE DATAGRAMS</div>
+    <div id="toast-stack" aria-live="assertive"></div>
+    <div id="wave-banner"><div id="banner-kicker" class="banner-kicker">Threat detected</div><div id="banner-title" class="banner-title">SYN FLOOD</div><div id="banner-sub" class="banner-sub"></div><div class="banner-line"></div></div>
+  </div>
+
+  <div id="boot">
+    <div class="boot-shell">
+      <div class="boot-copy">
+        <div class="boot-class">Live-fire network defense simulation // classified</div>
+        <div class="boot-title">PACKET<span>STORM</span></div>
+        <p class="boot-sub">An enterprise network is about to come under coordinated attack. Keep legitimate DNS, TLS, identity and application traffic alive while the kill chain unfolds in real time.</p>
+        <div class="boot-actions"><button id="start-btn">Initialize defense</button><div class="boot-hint">ORBIT: DRAG · ZOOM: WHEEL<br/>SELECT NODES / LINKS: CLICK</div></div>
+      </div>
+      <div class="boot-visual">
+        <div class="radar"><div class="radar-lines"></div><div class="radar-sweep"></div><i class="radar-node n1"></i><i class="radar-node n2"></i><i class="radar-node n3"></i><i class="radar-node n4"></i><i class="radar-node n5"></i><i class="radar-attack a1"></i><i class="radar-attack a2"></i><i class="radar-attack a3"></i></div>
+        <div class="boot-status"><span><i></i>SIMULATION READY</span><span>BUILD 17.4.9 / ZERO TRUST LAB</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="end-screen">
+    <div class="end-card glass"><div class="end-kicker">INCIDENT CONTAINED</div><h2>POST-INCIDENT REPORT</h2><div id="end-score" class="end-score">000000</div><div class="end-grid"><div><span>UPTIME</span><b id="end-uptime">0%</b></div><div><span>BLOCKED</span><b id="end-blocked">0</b></div><div><span>EXFILTRATED</span><b id="end-exfil">0 MB</b></div></div><button id="restart-btn">RUN SIMULATION AGAIN</button></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+    const $ = id => document.getElementById(id);
+    const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const smoothstep = (a, b, x) => { const t = clamp((x-a)/(b-a)); return t*t*(3-2*t); };
+    const fmt = (n, width = 0) => Math.max(0, Math.floor(n || 0)).toLocaleString('en-US').padStart(width, '0');
+    const vec = a => new THREE.Vector3().fromArray(a);
+    const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const PS_NODES = [
+      {id:'internet',label:'INTERNET / ASN 64500',zone:'outside',type:'internet',pos:[-42,0,0]},
+      {id:'edge',label:'BORDER-RTR-01',zone:'outside',type:'router',pos:[-30,0,0]},
+      {id:'fw',label:'ZBFW-01',zone:'boundary',type:'firewall',pos:[-18,0,0]},
+      {id:'dmzSw',label:'DMZ-SW-01',zone:'dmz',type:'switch',pos:[-7,0,-10]},
+      {id:'web',label:'WEB / TCP 443',zone:'dmz',type:'server',pos:[3,0,-16],service:'portal'},
+      {id:'publicDns',label:'DNS / UDP 53',zone:'dmz',type:'server',pos:[4,0,-9],service:'publicDns'},
+      {id:'mail',label:'MAIL / TCP 25',zone:'dmz',type:'server',pos:[2,0,-2]},
+      {id:'coreA',label:'CORE-A',zone:'inside',type:'core',pos:[-3,0,6]},
+      {id:'coreB',label:'CORE-B',zone:'inside',type:'core',pos:[7,0,6]},
+      {id:'accessA',label:'ACCESS-A',zone:'inside',type:'switch',pos:[16,0,-1]},
+      {id:'accessB',label:'ACCESS-B',zone:'inside',type:'switch',pos:[16,0,15]},
+      {id:'serverSw',label:'SERVER-FABRIC',zone:'inside',type:'switch',pos:[16,0,7]},
+      {id:'client1',label:'ENG-WS01',zone:'inside',type:'client',pos:[29,0,-5],vulnerable:.72},
+      {id:'client2',label:'FIN-WS02',zone:'inside',type:'client',pos:[39,0,-1],vulnerable:.58},
+      {id:'client3',label:'OPS-WS03',zone:'inside',type:'client',pos:[42,0,8],vulnerable:.65},
+      {id:'client4',label:'HR-WS04',zone:'inside',type:'client',pos:[40,0,17],vulnerable:.61},
+      {id:'client5',label:'SOC-WS05',zone:'inside',type:'client',pos:[31,0,22],vulnerable:.35},
+      {id:'app',label:'APP / TCP 8443',zone:'inside',type:'server',pos:[29,0,3],service:'api',vulnerable:.22},
+      {id:'db',label:'DB / TCP 5432',zone:'inside',type:'server',pos:[30,0,10],service:'database',vulnerable:.1},
+      {id:'auth',label:'AUTH / TCP 636',zone:'inside',type:'server',pos:[29,0,17],service:'auth',vulnerable:.16}
+    ];
+
+    const PS_LINKS = [
+      {id:'internet_edge',src:'internet',dst:'edge',capacity:18000,cost:18,cuttable:false},
+      {id:'edge_fw',src:'edge',dst:'fw',capacity:15000,cost:2,cuttable:false},
+      {id:'fw_dmz',src:'fw',dst:'dmzSw',capacity:9000,cost:1,cuttable:true},
+      {id:'dmz_web',src:'dmzSw',dst:'web',capacity:6000,cost:1,cuttable:true},
+      {id:'dmz_dns',src:'dmzSw',dst:'publicDns',capacity:4000,cost:1,cuttable:true},
+      {id:'dmz_mail',src:'dmzSw',dst:'mail',capacity:4000,cost:1,cuttable:true},
+      {id:'fw_coreA',src:'fw',dst:'coreA',capacity:12000,cost:1,cuttable:true},
+      {id:'fw_coreB',src:'fw',dst:'coreB',capacity:12000,cost:2,cuttable:true},
+      {id:'coreA_coreB',src:'coreA',dst:'coreB',capacity:16000,cost:3,cuttable:true},
+      {id:'coreA_accessA',src:'coreA',dst:'accessA',capacity:8000,cost:1,cuttable:true},
+      {id:'coreB_accessA',src:'coreB',dst:'accessA',capacity:8000,cost:2,cuttable:true},
+      {id:'coreA_accessB',src:'coreA',dst:'accessB',capacity:8000,cost:2,cuttable:true},
+      {id:'coreB_accessB',src:'coreB',dst:'accessB',capacity:8000,cost:1,cuttable:true},
+      {id:'coreA_server',src:'coreA',dst:'serverSw',capacity:10000,cost:1,cuttable:true},
+      {id:'coreB_server',src:'coreB',dst:'serverSw',capacity:10000,cost:1,cuttable:true},
+      {id:'accessA_c1',src:'accessA',dst:'client1',capacity:2500,cost:1,cuttable:true},
+      {id:'accessA_c2',src:'accessA',dst:'client2',capacity:2500,cost:1,cuttable:true},
+      {id:'accessB_c3',src:'accessB',dst:'client3',capacity:2500,cost:1,cuttable:true},
+      {id:'accessB_c4',src:'accessB',dst:'client4',capacity:2500,cost:1,cuttable:true},
+      {id:'accessB_c5',src:'accessB',dst:'client5',capacity:2500,cost:1,cuttable:true},
+      {id:'server_app',src:'serverSw',dst:'app',capacity:5000,cost:1,cuttable:true},
+      {id:'server_db',src:'serverSw',dst:'db',capacity:5000,cost:1,cuttable:true},
+      {id:'server_auth',src:'serverSw',dst:'auth',capacity:5000,cost:1,cuttable:true}
+    ];
+
+    const PS_SERVICES = [
+      {id:'portal',name:'CUSTOMER PORTAL',node:'web',port:443,proto:'TCP',weight:3,dependencies:['publicDns','api','auth']},
+      {id:'publicDns',name:'PUBLIC DNS',node:'publicDns',port:53,proto:'UDP',weight:1.5,dependencies:[]},
+      {id:'api',name:'APPLICATION API',node:'app',port:8443,proto:'TCP',weight:2,dependencies:['database','auth']},
+      {id:'auth',name:'IDENTITY / LDAPS',node:'auth',port:636,proto:'TCP',weight:2,dependencies:[]},
+      {id:'database',name:'POSTGRES DATA',node:'db',port:5432,proto:'TCP',weight:1.5,dependencies:[]}
+    ];
+
+    const PS_WAVES = [
+      {id:'syn',number:1,title:'SYN FLOOD DDoS',short:'SYN FLOOD',start:12,end:54,shot:'edge',desc:'Spoofed half-open TCP sessions are exhausting the state table. Apply an ingress SYN rate policy.'},
+      {id:'scan',number:2,title:'PORT RECONNAISSANCE',short:'PORT SCAN',start:46,end:82,shot:'edge',desc:'Sequential probes are enumerating the public attack surface. IPS signatures can suppress reconnaissance.'},
+      {id:'lateral',number:3,title:'LATERAL MOVEMENT',short:'LATERAL MOVE',start:74,end:124,shot:'inside',desc:'Patient zero is probing SMB, RDP and WinRM inside the trust zone. Isolate compromised endpoints.'},
+      {id:'exfil',number:4,title:'DATA EXFILTRATION',short:'DATA EXFIL',start:111,end:156,shot:'exfil',desc:'An established TLS channel is moving data toward C2. Rate limiting does not affect this stream.'}
+    ];
+
+    const nodeDef = new Map(PS_NODES.map(n => [n.id,n]));
+    const serviceDef = new Map(PS_SERVICES.map(s => [s.id,s]));
+
+    // ---------- CINEMATIC THREE.JS ENGINE ----------
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x02060b);
+    scene.fog = new THREE.FogExp2(0x02060b, .012);
+    const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, .1, 260);
+    camera.position.set(57,43,61);
+
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({antialias:false,powerPreference:'high-performance'});
+    } catch (error) {
+      document.querySelector('.boot-class').textContent='GRAPHICS CAPABILITY CHECK // BLOCKED';
+      document.querySelector('.boot-sub').textContent='PACKET STORM needs WebGL to render the live topology. Enable browser hardware acceleration or open this file in a WebGL-capable browser.';
+      $('start-btn').textContent='WEBGL REQUIRED';
+      $('start-btn').disabled=true;
+      throw error;
+    }
+    renderer.setSize(innerWidth,innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio,1.4));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    renderer.setClearColor(0x02060b,1);
+    $('viewport').append(renderer.domElement);
+
+    scene.add(new THREE.HemisphereLight(0x4c77aa,0x020407,1.35));
+    const keyLight = new THREE.DirectionalLight(0xa5d8ff,2.2); keyLight.position.set(-16,35,22); scene.add(keyLight);
+    const rimLight = new THREE.DirectionalLight(0x4a38b8,1.05); rimLight.position.set(40,18,-28); scene.add(rimLight);
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene,camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.08,.42,.64);
+    composer.addPass(bloom); composer.addPass(new OutputPass());
+
+    const hdr = (hex,gain=2.4) => new THREE.Color(hex).multiplyScalar(gain);
+    const glowMat = (hex,gain=2.4,opacity=1) => new THREE.MeshBasicMaterial({color:hdr(hex,gain),transparent:opacity<1,opacity,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false});
+    const metal = (hex=0x11263a,emissive=0x06111c) => new THREE.MeshStandardMaterial({color:hex,emissive,emissiveIntensity:.65,roughness:.34,metalness:.8});
+    const M = {
+      metal:metal(),dark:metal(0x06111c,0x010409),cyan:glowMat(0x29e6ff,2.25),red:glowMat(0xff3156,2.65),
+      amber:glowMat(0xffb02e,2.4),green:glowMat(0x38ffb5,2.2),violet:glowMat(0xa960ff,2.5),
+      glass:new THREE.MeshPhysicalMaterial({color:0x112c45,transparent:true,opacity:.28,roughness:.18,metalness:.3,depthWrite:false})
+    };
+    const G = {
+      pad:new THREE.CylinderGeometry(1.65,1.65,.3,32),ring:new THREE.TorusGeometry(1.8,.045,6,48),
+      led:new THREE.BoxGeometry(.22,.07,.04),screen:new THREE.PlaneGeometry(1.7,1),smallRing:new THREE.TorusGeometry(.63,.04,6,30),
+      rack:new THREE.BoxGeometry(3.1,5.8,2.8)
+    };
+
+    const floorMat = new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uTime:{value:0},uAttack:{value:0}},vertexShader:`
+      varying vec2 vWorld; void main(){vec4 w=modelMatrix*vec4(position,1.);vWorld=w.xz;gl_Position=projectionMatrix*viewMatrix*w;}`,
+      fragmentShader:`precision highp float;varying vec2 vWorld;uniform float uTime;uniform float uAttack;
+      float grid(vec2 p,float size,float width){vec2 q=abs(fract(p/size-.5)-.5)/fwidth(p/size);return 1.-min(min(q.x,q.y)/width,1.);}
+      void main(){float mi=grid(vWorld,2.,1.);float ma=grid(vWorld,10.,1.25);float fade=1.-smoothstep(42.,78.,length(vWorld));
+      float sx=mod(uTime*7.+70.,140.)-70.;float scan=pow(max(0.,1.-abs(vWorld.x-sx)/4.),3.);vec3 base=vec3(.02,.2,.31)*mi+vec3(.03,.43,.62)*ma;
+      base+=mix(vec3(.03,.32,.52),vec3(.8,.02,.13),uAttack)*scan*.2;float a=(mi*.1+ma*.21+scan*.055)*fade;gl_FragColor=vec4(base,a);}`});
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(144,94),floorMat); floor.rotation.x=-Math.PI/2; floor.position.y=-.08; scene.add(floor);
+
+    function createDust(count=560){
+      const p=new Float32Array(count*3); let seed=0x2f6e2b1; const rnd=()=>((seed=Math.imul(seed^seed>>>15,1|seed))>>>0)/4294967296;
+      for(let i=0;i<count;i++){p[i*3]=(rnd()-.5)*138;p[i*3+1]=.8+rnd()*29;p[i*3+2]=(rnd()-.5)*88;}
+      const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(p,3));
+      return new THREE.Points(g,new THREE.PointsMaterial({color:0x4292b7,size:.075,transparent:true,opacity:.34,blending:THREE.AdditiveBlending,depthWrite:false}));
+    }
+    const dust=createDust();scene.add(dust);
+
+    const zoneViews=new Map(), threatRed=new THREE.Color(0xff173f);
+    function labelTexture(text,color){
+      const c=document.createElement('canvas');c.width=512;c.height=96;const x=c.getContext('2d');x.font='700 35px ui-monospace, Menlo, monospace';x.letterSpacing='5px';x.fillStyle=color;x.shadowColor=color;x.shadowBlur=14;x.fillText(text,18,60);
+      const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.minFilter=THREE.LinearFilter;return t;
+    }
+    function createZone(id,label,center,size,color){
+      const group=new THREE.Group();group.position.fromArray(center);const geo=new THREE.BoxGeometry(...size);
+      const fill=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color,transparent:true,opacity:.034,side:THREE.BackSide,depthWrite:false}));fill.renderOrder=-2;
+      const edges=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color,transparent:true,opacity:.28,blending:THREE.AdditiveBlending,depthWrite:false}));
+      const base=new THREE.Mesh(new THREE.PlaneGeometry(size[0],size[2]),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.04,blending:THREE.AdditiveBlending,depthWrite:false}));base.rotation.x=-Math.PI/2;base.position.y=-size[1]/2+.04;
+      const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture(label,'#'+new THREE.Color(color).getHexString()),transparent:true,opacity:.66,depthWrite:false}));sprite.scale.set(11,2,1);sprite.position.set(-size[0]/2+6,size[1]/2+.8,-size[2]/2+1.1);
+      group.add(fill,edges,base,sprite);scene.add(group);zoneViews.set(id,{group,fill,edges,base,baseColor:new THREE.Color(color),threat:0});
+    }
+    createZone('outside','OUTSIDE',[-35,4,0],[20,8,40],0x366eff);
+    createZone('dmz','DMZ',[-6,4,-9],[26,8,29],0xa442ff);
+    createZone('inside','INSIDE',[23,4,8],[47,8,39],0x24d9ae);
+
+    function setZoneThreat(id,amount){const z=zoneViews.get(id);if(!z)return;z.threat=clamp(amount);z.fill.material.opacity=.034+z.threat*.05;z.edges.material.opacity=.28+z.threat*.38;z.fill.material.color.copy(z.baseColor).lerp(threatRed,z.threat*.75);z.edges.material.color.copy(z.fill.material.color);}
+
+    const nodeViews=new Map(), nodePickers=[];
+    const stateColors={healthy:new THREE.Color(0x25dbff),warning:new THREE.Color(0xffb02e),infected:new THREE.Color(0xff3156),quarantined:new THREE.Color(0xa960ff),offline:new THREE.Color(0x233a49)};
+    function makeNodeBase(def,radius=1.7,labelHeight=3.2){
+      const g=new THREE.Group();g.position.fromArray(def.pos);g.userData={nodeId:def.id,kind:def.type,state:'healthy',labelHeight};
+      const pad=new THREE.Mesh(G.pad,M.dark);pad.position.y=.15;
+      const ring=new THREE.Mesh(G.ring,M.cyan.clone());ring.rotation.x=Math.PI/2;ring.position.y=.24;ring.userData.baseScale=radius/1.8;ring.scale.setScalar(ring.userData.baseScale);
+      const contact=new THREE.Mesh(new THREE.CircleGeometry(radius*1.34,36),new THREE.MeshBasicMaterial({color:0x0b82aa,transparent:true,opacity:.16,blending:THREE.AdditiveBlending,depthWrite:false}));contact.rotation.x=-Math.PI/2;contact.position.y=.015;
+      const hit=new THREE.Mesh(new THREE.SphereGeometry(radius*1.16,12,8),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=labelHeight*.45;hit.userData={entityType:'node',id:def.id};nodePickers.push(hit);
+      g.add(pad,ring,contact,hit);g.userData.ring=ring;g.userData.contact=contact;g.userData.hitMesh=hit;nodeViews.set(def.id,g);scene.add(g);
+      const el=document.createElement('div');el.className='world-label';el.textContent=def.label;el.dataset.node=def.id;$('world-labels').append(el);g.userData.label=el;
+      return g;
+    }
+    function createSwitch(def){
+      const core=def.type==='core',g=makeNodeBase(def,core?2:1.72,2.8);const body=new THREE.Mesh(new THREE.BoxGeometry(core?3.9:3.15,1.15,2.3),M.metal);body.position.y=1.15;
+      const slit=new THREE.Mesh(new THREE.BoxGeometry(core?3:2.35,.09,.05),M.cyan.clone());slit.position.set(0,1.18,1.18);g.add(body,slit);
+      const lights=[];for(let r=0;r<2;r++)for(let i=0;i<6;i++){const l=new THREE.Mesh(G.led,(i+r)%3?M.green:M.cyan);l.position.set(-1.12+i*.45,.96+r*.25,1.205);g.add(l);lights.push(l);}
+      g.userData.emissiveMeshes=[slit];g.userData.portY=1.2;return g;
+    }
+    function createRouter(def){
+      const g=makeNodeBase(def,1.85,3.35);const body=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,.88,10),M.metal);body.position.y=1.25;
+      const top=new THREE.Mesh(new THREE.TorusGeometry(.95,.066,7,36),M.cyan.clone());top.rotation.x=Math.PI/2;top.position.y=1.72;g.add(body,top);
+      for(let i=0;i<4;i++){const a=new THREE.Mesh(new THREE.ConeGeometry(.18,.55,5),M.cyan.clone());a.position.set(Math.cos(i*Math.PI/2)*.53,1.75,Math.sin(i*Math.PI/2)*.53);a.rotation.z=-Math.PI/2;a.rotation.y=-i*Math.PI/2;g.add(a);}
+      g.userData.emissiveMeshes=[top];g.userData.portY=1.45;return g;
+    }
+    function createFirewall(def){
+      const g=makeNodeBase(def,2.3,4.7);const s=new THREE.Shape();s.moveTo(0,2.4);s.lineTo(1.8,1.6);s.lineTo(1.5,-.7);s.quadraticCurveTo(0,-2.05,0,-2.05);s.quadraticCurveTo(-1.5,-.7,-1.5,-.7);s.lineTo(-1.8,1.6);s.closePath();
+      const body=new THREE.Mesh(new THREE.ExtrudeGeometry(s,{depth:.4,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:.11,bevelThickness:.08}),M.metal);body.scale.set(.82,.82,.82);body.position.set(0,2.15,-.2);
+      const seam=new THREE.Mesh(new THREE.TorusGeometry(.6,.06,6,32,Math.PI),M.amber.clone());seam.rotation.z=Math.PI;seam.position.set(0,2.23,.24);
+      const bar=new THREE.Mesh(new THREE.BoxGeometry(2.2,.075,.05),M.cyan.clone());bar.position.set(0,2.1,.27);bar.userData.scan=true;g.add(body,seam,bar);g.userData.emissiveMeshes=[seam,bar];g.userData.portY=2.1;return g;
+    }
+    function createServer(def){
+      const g=makeNodeBase(def,2.05,6.7);const body=new THREE.Mesh(G.rack,M.dark);body.position.y=3.15;const frame=new THREE.LineSegments(new THREE.EdgesGeometry(G.rack),new THREE.LineBasicMaterial({color:0x3f7188,transparent:true,opacity:.76}));frame.position.copy(body.position);g.add(body,frame);
+      const color=def.zone==='dmz'?0xb55cff:def.service==='database'?0xffc857:def.service==='auth'?0x6cffc7:0x25dbff,lights=[];
+      for(let y=0;y<7;y++){const tray=new THREE.Mesh(new THREE.BoxGeometry(2.72,.43,2.6),M.metal);tray.position.set(0,.86+y*.67,.14);const led=new THREE.Mesh(new THREE.BoxGeometry(1.73,.06,.04),glowMat(color,2));led.position.set(0,.86+y*.67,1.42);g.add(tray,led);lights.push(led);}
+      g.userData.emissiveMeshes=lights;g.userData.portY=2.7;return g;
+    }
+    function createClient(def){
+      const g=makeNodeBase(def,1.45,3.55);const stand=new THREE.Mesh(new THREE.BoxGeometry(.25,.9,.25),M.metal);stand.position.y=.95;const screen=new THREE.Mesh(new THREE.BoxGeometry(2.15,1.38,.22),M.dark);screen.position.y=1.85;
+      const face=new THREE.Mesh(G.screen,new THREE.MeshBasicMaterial({color:hdr(0x25dbff,1.25),toneMapped:false}));face.position.set(0,1.85,.116);const base=new THREE.Mesh(new THREE.BoxGeometry(1.2,.12,.7),M.metal);base.position.y=.48;g.add(stand,screen,face,base);g.userData.emissiveMeshes=[face];g.userData.portY=1.3;return g;
+    }
+    function createInternet(def){
+      const g=makeNodeBase(def,2.8,5.6);const blobs=[];[[0,2.1,0,1.4],[-1.3,1.9,0,.95],[1.25,1.9,.05,1.05],[-.5,2.85,0,1.05],[.8,2.72,0,.9]].forEach(([x,y,z,s])=>{const b=new THREE.Mesh(new THREE.IcosahedronGeometry(s,1),M.glass);b.position.set(x,y,z);g.add(b);blobs.push(b);});
+      const halo=new THREE.Mesh(new THREE.TorusGeometry(2.35,.065,6,52),M.red.clone());halo.position.y=2.25;g.add(halo);g.userData.emissiveMeshes=[halo];g.userData.portY=2.2;return g;
+    }
+    function createNode(def){return def.type==='internet'?createInternet(def):def.type==='router'?createRouter(def):def.type==='firewall'?createFirewall(def):def.type==='server'?createServer(def):def.type==='client'?createClient(def):createSwitch(def);}
+    PS_NODES.forEach(createNode);
+
+    function setNodeState(id,state){
+      const g=nodeViews.get(id);if(!g||g.userData.state===state)return;g.userData.state=state;const c=stateColors[state]||stateColors.healthy;
+      g.userData.ring.material.color.copy(c).multiplyScalar(state==='infected'?3.2:2.2);g.userData.contact.material.color.copy(c);g.userData.contact.material.opacity=state==='offline'?.035:.18;
+      (g.userData.emissiveMeshes||[]).forEach(m=>m.material.color&&m.material.color.copy(c).multiplyScalar(state==='infected'?2.8:1.75));
+      g.userData.label.classList.toggle('infected',state==='infected');g.userData.label.classList.toggle('quarantined',state==='quarantined');
+    }
+
+    // ---------- TOPOLOGY GRAPH + CURVED LINKS ----------
+    const linkViews=new Map(),linkPickers=[];
+    function linkCurve(a,b,lift=.65){const p0=a.clone(),p2=b.clone(),mid=p0.clone().lerp(p2,.5);mid.y+=lift+p0.distanceTo(p2)*.024;return new THREE.QuadraticBezierCurve3(p0,mid,p2);}
+    function portPosition(id){const g=nodeViews.get(id);return g.position.clone().add(new THREE.Vector3(0,g.userData.portY||1.2,0));}
+    function compilePath(points){
+      const n=points.length,xyz=new Float32Array(n*3),cumulative=new Float32Array(n);let total=0;
+      for(let i=0;i<n;i++){xyz[i*3]=points[i].x;xyz[i*3+1]=points[i].y;xyz[i*3+2]=points[i].z;if(i){const a=(i-1)*3,b=i*3;total+=Math.hypot(xyz[b]-xyz[a],xyz[b+1]-xyz[a+1],xyz[b+2]-xyz[a+2]);}cumulative[i]=total;}
+      return{xyz,cumulative,total,n};
+    }
+    function sampleCompiled(path,u,out){const d=clamp(u)*path.total,c=path.cumulative;let lo=0,hi=path.n-1;while(lo+1<hi){const m=(lo+hi)>>1;if(c[m]<d)lo=m;else hi=m;}const span=Math.max(1e-5,c[hi]-c[lo]),f=(d-c[lo])/span,a=lo*3,b=hi*3;return out.set(path.xyz[a]+(path.xyz[b]-path.xyz[a])*f,path.xyz[a+1]+(path.xyz[b+1]-path.xyz[a+1])*f,path.xyz[a+2]+(path.xyz[b+2]-path.xyz[a+2])*f);}
+    function createLink(def){
+      const curve=linkCurve(portPosition(def.src),portPosition(def.dst));const pts=curve.getPoints(28),geo=new THREE.BufferGeometry().setFromPoints(pts);
+      const under=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0x03111a,transparent:true,opacity:.95}));
+      const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0x147f9d,transparent:true,opacity:.7,blending:THREE.AdditiveBlending,depthWrite:false}));
+      const glow=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0x22d6f4,transparent:true,opacity:.15,blending:THREE.AdditiveBlending,depthWrite:false}));glow.scale.set(1,1.012,1);
+      const hit=new THREE.Mesh(new THREE.TubeGeometry(curve,20,.34,5,false),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));hit.userData={entityType:'link',id:def.id};linkPickers.push(hit);
+      scene.add(under,line,glow,hit);linkViews.set(def.id,{def,curve,points:pts,line,under,glow,hit,state:'up',flow:0});
+    }
+    PS_LINKS.forEach(createLink);
+
+    class Graph{
+      constructor(nodes,links){this.nodes=new Map(nodes.map(n=>[n.id,Object.assign({up:true,infected:false,quarantined:false},n)]));this.links=new Map(links.map(l=>[l.id,Object.assign({up:true,utilization:0,offered:0},l)]));this.adj=new Map(nodes.map(n=>[n.id,[]]));for(const l of this.links.values()){this.adj.get(l.src).push({node:l.dst,link:l.id});this.adj.get(l.dst).push({node:l.src,link:l.id});}this.version=1;this.cache=new Map();}
+      invalidate(){this.version++;this.cache.clear();routeVisualCache.clear();}
+      setLink(id,up){const l=this.links.get(id);if(!l||l.up===up)return false;l.up=up;this.invalidate();return true;}
+      setQuarantine(id,on){const n=this.nodes.get(id);if(!n||n.quarantined===on)return false;n.quarantined=on;this.invalidate();return true;}
+      route(src,dst){const key=this.version+':'+src+'>'+dst;if(this.cache.has(key))return this.cache.get(key);const sn=this.nodes.get(src),dn=this.nodes.get(dst);if(!sn||!dn||!sn.up||!dn.up||sn.quarantined||dn.quarantined)return null;const dist=new Map([[src,0]]),prev=new Map(),open=[{id:src,d:0}];while(open.length){open.sort((a,b)=>a.d-b.d);const cur=open.shift();if(cur.d!==dist.get(cur.id))continue;if(cur.id===dst)break;for(const e of this.adj.get(cur.id)){const l=this.links.get(e.link),n=this.nodes.get(e.node);if(!l.up||!n.up||n.quarantined)continue;const nd=cur.d+l.cost;if(nd<(dist.get(e.node)??Infinity)){dist.set(e.node,nd);prev.set(e.node,{node:cur.id,link:e.link});open.push({id:e.node,d:nd});}}}if(!dist.has(dst))return null;const nodes=[dst],links=[];let p=dst;while(p!==src){const s=prev.get(p);if(!s)return null;links.push(s.link);nodes.push(s.node);p=s.node;}nodes.reverse();links.reverse();const r={nodes,links,cost:dist.get(dst)};this.cache.set(key,r);return r;}
+    }
+    const routeVisualCache=new Map();
+    function visualPath(route){
+      if(!route)return null;const key=route.nodes.join('>')+'@'+sim?.graph?.version;if(routeVisualCache.has(key))return routeVisualCache.get(key);const points=[];
+      route.links.forEach((id,i)=>{const lv=linkViews.get(id),from=route.nodes[i],same=lv.def.src===from,seg=same?lv.points:[...lv.points].reverse();if(i)seg.shift();points.push(...seg);});
+      const compiled=compilePath(points);routeVisualCache.set(key,compiled);return compiled;
+    }
+
+    function routeUntil(route,nodeId){
+      if(!route||!nodeId)return route;const i=route.nodes.indexOf(nodeId);if(i<1)return route;return{nodes:route.nodes.slice(0,i+1),links:route.links.slice(0,i),cost:route.cost};
+    }
+    function setLinkVisual(id,state){
+      const l=linkViews.get(id);if(!l)return;l.state=state;const down=state==='down',hot=state==='reroute',busy=state==='congested';
+      l.line.material.color.set(down?0xff3156:hot?0x49ffbd:busy?0xffb02e:0x147f9d);l.glow.material.color.set(down?0xff3156:hot?0x49ffbd:busy?0xffb02e:0x22d6f4);
+      l.line.material.opacity=down?.15:hot?.95:busy?.92:.7;l.glow.material.opacity=down?.04:hot?.48:busy?.35:.15;
+      if(down)ringFX?.spawn(l.curve.getPoint(.5),0xff3156,.85,'vertical');
+    }
+
+    class PacketPool{
+      constructor(max,color,radius=.13){
+        this.max=max;this.live=0;this.items=Array.from({length:max},()=>({active:false,path:null,u:0,speed:0,phase:0,scale:1,effect:'',target:''}));this.free=Array.from({length:max},(_,i)=>max-1-i);
+        const geo=new THREE.IcosahedronGeometry(radius,1),mat=new THREE.MeshBasicMaterial({color:hdr(color,3),toneMapped:false});this.mesh=new THREE.InstancedMesh(geo,mat,max);this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);this.mesh.frustumCulled=false;this.mesh.count=max;scene.add(this.mesh);
+        this.tmpPos=new THREE.Vector3();this.tmpMat=new THREE.Matrix4();this.tmpQuat=new THREE.Quaternion();this.tmpScale=new THREE.Vector3();for(let i=0;i<max;i++){this.tmpMat.makeScale(0,0,0);this.mesh.setMatrixAt(i,this.tmpMat);}this.mesh.instanceMatrix.needsUpdate=true;
+      }
+      spawn({path,speed=.28,phase=0,scale=1,reverse=false,effect='',target=''}){if(!path)return-1;const i=this.free.pop();if(i===undefined)return-1;Object.assign(this.items[i],{active:true,path,u:reverse?1:0,speed:reverse?-Math.abs(speed):Math.abs(speed),phase,scale,effect,target});this.live++;return i;}
+      kill(i,complete=false){const p=this.items[i];if(!p.active)return;if(complete&&p.effect)packetCompleted(p,this.tmpPos);p.active=false;p.path=null;p.effect='';p.target='';this.free.push(i);this.live--;this.tmpMat.makeScale(0,0,0);this.mesh.setMatrixAt(i,this.tmpMat);}
+      clear(){for(let i=0;i<this.max;i++)if(this.items[i].active)this.kill(i);this.mesh.instanceMatrix.needsUpdate=true;}
+      update(dt,t){for(let i=0;i<this.max;i++){const p=this.items[i];if(!p.active)continue;p.u+=p.speed*dt;if(p.u>1||p.u<0){sampleCompiled(p.path,clamp(p.u),this.tmpPos);this.kill(i,true);continue;}sampleCompiled(p.path,p.u,this.tmpPos);this.tmpPos.y+=Math.sin((p.u*18+p.phase)*Math.PI)*.045;const f=p.scale*(.86+.18*Math.sin(t*18+p.phase));this.tmpScale.setScalar(f);this.tmpMat.compose(this.tmpPos,this.tmpQuat,this.tmpScale);this.mesh.setMatrixAt(i,this.tmpMat);}this.mesh.instanceMatrix.needsUpdate=true;}
+    }
+    const packetPools={legit:new PacketPool(380,0x2ce8ff,.14),malicious:new PacketPool(520,0xff3156,.115),exfil:new PacketPool(110,0xffc640,.185),inspected:new PacketPool(130,0xb36aff,.13)};
+
+    class RingEffects{
+      constructor(max=42){this.items=[];for(let i=0;i<max;i++){const mesh=new THREE.Mesh(G.smallRing,glowMat(0x25dbff,2.6,.999));mesh.visible=false;scene.add(mesh);this.items.push({mesh,life:0,duration:1});}}
+      spawn(pos,color=0x25dbff,duration=.55,axis='horizontal'){const e=this.items.find(x=>x.life<=0)||this.items[0];e.life=duration;e.duration=duration;e.mesh.visible=true;e.mesh.position.copy(pos);e.mesh.material.color.copy(hdr(color,2.8));e.mesh.rotation.set(axis==='horizontal'?Math.PI/2:0,0,0);e.mesh.scale.setScalar(.1);}
+      update(dt){for(const e of this.items){if(e.life<=0)continue;e.life-=dt;const u=1-Math.max(0,e.life)/e.duration;e.mesh.scale.setScalar(.12+u*3);e.mesh.material.opacity=(1-u)*.9;e.mesh.visible=e.life>0;}}
+    }
+    const ringFX=new RingEffects();
+    class ZapEffects{
+      constructor(max=28,segments=10){this.segments=segments;this.items=[];this.dir=new THREE.Vector3();this.side=new THREE.Vector3();for(let i=0;i<max;i++){const arr=new Float32Array(segments*3),geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(arr,3));const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:hdr(0xb8f6ff,4),transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false}));line.visible=false;scene.add(line);this.items.push({line,a:new THREE.Vector3(),b:new THREE.Vector3(),life:0,duration:.2,seed:i*13.7});}}
+      spawn(a,b){const e=this.items.find(x=>x.life<=0)||this.items[0];e.a.copy(a);e.b.copy(b);e.life=e.duration;e.line.visible=true;this.rebuild(e,0);}
+      rebuild(e,t){const p=e.line.geometry.attributes.position.array,dir=this.dir.subVectors(e.b,e.a),side=this.side.set(-dir.z,0,dir.x).normalize();for(let i=0;i<this.segments;i++){const u=i/(this.segments-1),j=(i===0||i===this.segments-1)?0:Math.sin((i+e.seed*19.1+t*40)*12.9898)*.2;p[i*3]=e.a.x+dir.x*u+side.x*j;p[i*3+1]=e.a.y+dir.y*u+j*.6;p[i*3+2]=e.a.z+dir.z*u+side.z*j;}e.line.geometry.attributes.position.needsUpdate=true;}
+      update(dt,t){for(const e of this.items){if(e.life<=0)continue;e.life-=dt;e.line.material.opacity=Math.max(0,e.life/e.duration);this.rebuild(e,t);e.line.visible=e.life>0;}}
+    }
+    const zapFX=new ZapEffects();
+    function nodeFxPos(id){const g=nodeViews.get(id);return g?g.position.clone().add(new THREE.Vector3(0,g.userData.portY||1.3,0)):new THREE.Vector3();}
+    function packetCompleted(p,pos){
+      if(p.effect==='drop'){ringFX.spawn(pos,0xff3156,.42,'vertical');audioEngine.zap(false);}
+      else if(p.effect==='ips'){ringFX.spawn(pos,0xb36aff,.5,'vertical');zapFX.spawn(nodeFxPos(p.target||'fw'),pos);audioEngine.zap(true);}
+      else if(p.effect==='probe')ringFX.spawn(pos,0xff3d74,.65,'horizontal');
+    }
+
+    const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.065;controls.minDistance=24;controls.maxDistance=108;controls.maxPolarAngle=Math.PI*.47;controls.minPolarAngle=.2;controls.target.set(0,1.2,3);
+    const shots={overview:{pos:new THREE.Vector3(57,43,61),target:new THREE.Vector3(0,1.2,3),fov:45},edge:{pos:new THREE.Vector3(0,22,36),target:new THREE.Vector3(-22,2,0),fov:41},inside:{pos:new THREE.Vector3(58,22,37),target:new THREE.Vector3(24,2,8),fov:42},exfil:{pos:new THREE.Vector3(29,14,31),target:new THREE.Vector3(-5,2,3),fov:38}};
+    const cameraDirector={active:true,duration:2,elapsed:0,fromPos:new THREE.Vector3(),fromTarget:new THREE.Vector3(),fromFov:45,shot:shots.overview,play(name,duration=1.8){const s=shots[name];if(!s)return;this.active=true;this.duration=duration;this.elapsed=0;this.shot=s;this.fromPos.copy(camera.position);this.fromTarget.copy(controls.target);this.fromFov=camera.fov;},cancel(){this.active=false;},update(dt){if(!this.active)return;this.elapsed+=dt;let u=clamp(this.elapsed/this.duration);u=u*u*(3-2*u);camera.position.lerpVectors(this.fromPos,this.shot.pos,u);controls.target.lerpVectors(this.fromTarget,this.shot.target,u);camera.fov=lerp(this.fromFov,this.shot.fov,u);camera.updateProjectionMatrix();if(u===1)this.active=false;}};
+    const screenShake={trauma:0,seed:7.13,savedPos:new THREE.Vector3(),savedQuat:new THREE.Quaternion(),q:new THREE.Quaternion(),add(v){this.trauma=Math.min(1,this.trauma+v);},apply(t){if(this.trauma<=.001)return false;this.savedPos.copy(camera.position);this.savedQuat.copy(camera.quaternion);const a=this.trauma*this.trauma,n1=Math.sin(t*31.7+this.seed),n2=Math.sin(t*43.1+this.seed*2.3),n3=Math.sin(t*27.3+4.7);camera.position.x+=n1*a*.24;camera.position.y+=n2*a*.16;this.q.setFromEuler(new THREE.Euler(n2*a*.006,n3*a*.008,n1*a*.01));camera.quaternion.multiply(this.q);return true;},restore(dt){camera.position.copy(this.savedPos);camera.quaternion.copy(this.savedQuat);this.trauma=Math.max(0,this.trauma-dt*.72);}};
+    let cameraMode='cinematic';controls.addEventListener('start',()=>{cameraDirector.cancel();cameraMode='free';updateCameraButton();});
+
+    const QUALITY=[{name:'SAFE',dpr:.72,bloom:0,legit:130,bad:180},{name:'HIGH',dpr:.92,bloom:.62,legit:220,bad:300},{name:'EPIC',dpr:1.15,bloom:.88,legit:300,bad:410},{name:'ULTRA',dpr:1.4,bloom:1.08,legit:380,bad:520}];
+    let quality=3,emaMs=16.7,badFor=0,goodFor=0;
+    function resizeRenderer(){const w=innerWidth,h=innerHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);composer.setSize(w,h);}
+    function applyQuality(q){quality=clamp(q,0,3)|0;const s=QUALITY[quality],dpr=Math.min(devicePixelRatio,s.dpr);renderer.setPixelRatio(dpr);composer.setPixelRatio(dpr);bloom.enabled=s.bloom>0;bloom.strength=s.bloom;dust.visible=quality>0;resizeRenderer();$('quality-state').textContent=s.name;$('gpu-load').textContent=quality<2?'THROTTLED':'NOMINAL';sim?.setVisualQuality((quality+1)/4);}
+    function samplePerformance(dt){emaMs=lerp(emaMs,dt*1000,.025);badFor=emaMs>23?badFor+dt:0;goodFor=emaMs<16.8?goodFor+dt:0;if(badFor>2.6&&quality>0){applyQuality(quality-1);badFor=goodFor=0;}else if(goodFor>10&&quality<3){applyQuality(quality+1);badFor=goodFor=0;}}
+    addEventListener('resize',resizeRenderer,{passive:true});
+
+    const labelPos=new THREE.Vector3();
+    function animateWorld(t,dt,attackIntensity){
+      floorMat.uniforms.uTime.value=t;floorMat.uniforms.uAttack.value=attackIntensity;dust.rotation.y=t*.006;
+      for(const g of nodeViews.values()){
+        const phase=(hashString(g.userData.nodeId)%100)*.1,pulse=.84+.16*Math.sin(t*2.2+phase),base=g.userData.ring.userData.baseScale;g.userData.ring.scale.setScalar(base*pulse);
+        if(g.userData.state==='infected')g.userData.ring.rotation.z=t*1.7;
+        if(g.userData.kind==='firewall'){const bar=(g.userData.emissiveMeshes||[]).find(x=>x.userData.scan);if(bar)bar.position.y=2.15+Math.sin(t*3.4)*1.04;}
+        labelPos.copy(g.position);labelPos.y+=g.userData.labelHeight;labelPos.project(camera);const visible=labelPos.z<1&&labelPos.z>-1&&Math.abs(labelPos.x)<1.2&&Math.abs(labelPos.y)<1.15;g.userData.label.style.display=visible?'block':'none';if(visible){g.userData.label.style.left=((labelPos.x*.5+.5)*innerWidth)+'px';g.userData.label.style.top=((-labelPos.y*.5+.5)*innerHeight)+'px';}
+      }
+      for(const l of linkViews.values()){if(l.state==='reroute'&&t>(l.rerouteUntil||0))setLinkVisual(l.def.id,'up');const u=sim?.graph?.links.get(l.def.id)?.utilization||0;if(l.state==='up'&&u>.82)setLinkVisual(l.def.id,'congested');else if(l.state==='congested'&&u<.7)setLinkVisual(l.def.id,'up');}
+      for(const p of Object.values(packetPools))p.update(dt,t);ringFX.update(dt);zapFX.update(dt,t);
+      $('particle-count').textContent=Object.values(packetPools).reduce((n,p)=>n+p.live,0);
+    }
+    function hashString(s){let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return h>>>0;}
+
+    // ---------- PROCEDURAL WEBAUDIO ----------
+    class AudioEngine{
+      constructor(){this.ctx=null;this.master=null;this.muted=false;this.started=false;}
+      init(){if(this.ctx){this.ctx.resume();return;}const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;this.ctx=new AC();this.master=this.ctx.createGain();this.master.gain.value=.22;this.master.connect(this.ctx.destination);
+        const hum=this.ctx.createOscillator(),hum2=this.ctx.createOscillator(),filter=this.ctx.createBiquadFilter(),gain=this.ctx.createGain(),lfo=this.ctx.createOscillator(),lfoGain=this.ctx.createGain();hum.type='sine';hum.frequency.value=47;hum2.type='triangle';hum2.frequency.value=71;filter.type='lowpass';filter.frequency.value=240;gain.gain.value=.055;lfo.frequency.value=.09;lfoGain.gain.value=.016;lfo.connect(lfoGain);lfoGain.connect(gain.gain);hum.connect(filter);hum2.connect(filter);filter.connect(gain);gain.connect(this.master);hum.start();hum2.start();lfo.start();this.started=true;}
+      tone(freq=440,duration=.09,type='sine',gain=.09,slide=0){if(!this.ctx||this.muted)return;const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=type;o.frequency.setValueAtTime(freq,this.ctx.currentTime);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+slide),this.ctx.currentTime+duration);g.gain.setValueAtTime(gain,this.ctx.currentTime);g.gain.exponentialRampToValueAtTime(.0001,this.ctx.currentTime+duration);o.connect(g);g.connect(this.master);o.start();o.stop(this.ctx.currentTime+duration+.02);}
+      click(){this.tone(610,.04,'square',.025,-120);}
+      alert(){this.tone(115,.32,'sawtooth',.09,120);setTimeout(()=>this.tone(170,.24,'square',.055,-35),100);}
+      stinger(){this.tone(74,.68,'sawtooth',.12,310);setTimeout(()=>this.tone(520,.14,'square',.05,-180),240);}
+      zap(ips){this.tone(ips?940:260,ips?.09:.06,'square',ips?.06:.035,ips?-520:120);}
+      success(){this.tone(420,.12,'sine',.05,180);setTimeout(()=>this.tone(680,.2,'sine',.05,150),100);}
+      toggle(){this.muted=!this.muted;if(this.master)this.master.gain.setTargetAtTime(this.muted?0:.22,this.ctx.currentTime,.03);return this.muted;}
+    }
+    const audioEngine=new AudioEngine();
+
+    // ---------- NETWORK + ATTACK SIMULATION ----------
+    const SECURITY={stateCapacity:12000,synTimeout:12,rateLimitPps:650,rateLimitBurst:1100,ipsCapacity:9000};
+    const IPS_DETECTION={syn:.25,scan:.97,lateral:.91,exfil:.82};
+    const SCAN_SEQUENCE=[
+      {target:'web',port:80,proto:'TCP',service:'HTTP',result:'FILTERED'},
+      {target:'web',port:443,proto:'TCP',service:'HTTPS',result:'OPEN'},
+      {target:'publicDns',port:53,proto:'UDP',service:'DNS',result:'OPEN'},
+      {target:'web',port:22,proto:'TCP',service:'SSH',result:'FILTERED'},
+      {target:'mail',port:25,proto:'TCP',service:'SMTP',result:'OPEN'},
+      {target:'web',port:445,proto:'TCP',service:'SMB',result:'FILTERED'},
+      {target:'web',port:3389,proto:'TCP',service:'RDP',result:'FILTERED'},
+      {target:'web',port:8443,proto:'TCP',service:'ALT-HTTPS',result:'FILTERED'}
+    ];
+    const LATERAL_PORTS=[{port:445,label:'SMB'},{port:3389,label:'RDP'},{port:5985,label:'WINRM'}];
+    const LATERAL_TARGETS=['client2','client3','client4','client5','app','auth','db'];
+    const MONITORED_PATHS=[['client1','auth'],['client2','app'],['client3','db'],['web','app'],['internet','web']];
+
+    class TokenBucket{
+      constructor(rate,burst){this.rate=rate;this.burst=burst;this.tokens=burst;}
+      refill(dt){this.tokens=Math.min(this.burst,this.tokens+this.rate*dt);}
+      fraction(demand){if(demand<=0)return 1;const accepted=Math.min(this.tokens,demand);this.tokens-=accepted;return accepted/demand;}
+    }
+    function zonePolicy(f){
+      if(f.knownState&&f.state==='ESTABLISHED')return{allow:true,reason:'stateful_return'};
+      const s=nodeDef.get(f.src),d=nodeDef.get(f.dst);if(!s||!d)return{allow:false,reason:'unknown_endpoint'};if(s.zone===d.zone)return{allow:true,reason:'same_zone'};
+      const key=s.zone+'>'+d.zone,p=f.dstPort,tcp=f.proto==='tcp',udp=f.proto==='udp';
+      if(key==='outside>dmz'){
+        if(f.dst==='web'&&tcp&&p===443)return{allow:true,reason:'outside_web_443'};
+        if(f.dst==='publicDns'&&(tcp||udp)&&p===53)return{allow:true,reason:'outside_dns_53'};
+        if(f.dst==='mail'&&tcp&&p===25)return{allow:true,reason:'outside_smtp_25'};
+        return{allow:false,reason:'zbfw_default_deny'};
+      }
+      if(key==='outside>inside')return{allow:false,reason:'zbfw_outside_inside'};
+      if(key==='inside>dmz'){
+        if(f.dst==='web'&&tcp&&p===443)return{allow:true,reason:'inside_web_443'};
+        if(f.dst==='publicDns'&&(tcp||udp)&&p===53)return{allow:true,reason:'inside_dns_53'};
+        return{allow:false,reason:'zbfw_default_deny'};
+      }
+      if(key==='dmz>inside')return f.src==='web'&&f.dst==='app'&&tcp&&p===8443?{allow:true,reason:'web_api_8443'}:{allow:false,reason:'zbfw_dmz_inside'};
+      if(key==='inside>outside')return(tcp&&(p===80||p===443))||((tcp||udp)&&p===53)?{allow:true,reason:'inside_egress'}:{allow:false,reason:'egress_policy'};
+      return{allow:false,reason:'zbfw_default_deny'};
+    }
+    function synFloodPps(time){const w=PS_WAVES[0],p=(time-w.start)/(w.end-w.start);if(p<0||p>1)return 0;const ramp=smoothstep(0,.28,p),tail=1-smoothstep(.88,1,p);return(2100+11800*ramp)*tail*(.92+.08*Math.sin(time*2.6));}
+
+    class PacketStormSim{
+      constructor(seed=0x51a7c0de){this.seedInitial=seed>>>0;this.fixedDt=1/20;this.maxSubsteps=4;this.visualQuality=1;this.reset();}
+      reset(){
+        this.graph=new Graph(PS_NODES,PS_LINKS);this.time=0;this.accumulator=0;this.seed=this.seedInitial||1;this.events=[];this._scheduled=[];this._visualAcc=Object.create(null);this._nextConversation=2.2;
+        this.mitigations={rateLimit:false,ips:false};this.synBucket=new TokenBucket(SECURITY.rateLimitPps,SECURITY.rateLimitBurst);this.firewall={halfOpenAttack:0,halfOpenLegit:3,established:235};
+        this.attack={started:Object.create(null),ended:Object.create(null),scanClock:0,scanIndex:0,lateralClock:0,attempt:0,infectedAt:Object.create(null),exfilContained:false,complete:false};
+        this.stats={totalAllowed:0,totalBlocked:0,blockedBy:Object.create(null),exfilBytes:0,pps:{offered:0,allowed:0,blocked:0,legit:0,malicious:0,exfil:0}};
+        this._ppsSmooth={offered:0,allowed:0,blocked:0,legit:0,malicious:0,exfil:0};this.services=Object.fromEntries(PS_SERVICES.map(s=>[s.id,{health:100}]));this.score=0;this.uptimeIntegral=0;this.availabilityPct=100;
+      }
+      rand(){let t=this.seed+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;}
+      update(realDt){this.accumulator+=Math.min(.1,Math.max(0,realDt));let steps=0;while(this.accumulator>=this.fixedDt&&steps<this.maxSubsteps){this._tick(this.fixedDt);this.accumulator-=this.fixedDt;steps++;}if(steps===this.maxSubsteps)this.accumulator=Math.min(this.accumulator,this.fixedDt);}
+      _active(id){const w=PS_WAVES.find(x=>x.id===id);return!!w&&this.time>=w.start&&this.time<w.end;}
+      _progress(id){const w=PS_WAVES.find(x=>x.id===id);return w?clamp((this.time-w.start)/(w.end-w.start)):0;}
+      _tick(dt){
+        this.time+=dt;this._tickRates={offered:0,allowed:0,blocked:0,legit:0,malicious:0,exfil:0};this._serviceDelivery=Object.create(null);this._waveTransitions();
+        this.firewall.halfOpenAttack*=Math.exp(-dt/SECURITY.synTimeout);this.firewall.halfOpenLegit+=(3.2-this.firewall.halfOpenLegit)*(1-Math.exp(-dt/.5));this.firewall.established+=(245-this.firewall.established)*(1-Math.exp(-dt/2));
+        const flows=this._legitimateFlows(),synPps=synFloodPps(this.time);if(synPps>0)flows.push({id:'syn_flood',class:'syn',src:'internet',dst:'web',proto:'tcp',dstPort:443,flags:'SYN',state:'NEW',knownState:false,offeredPps:synPps,bytesPerPacket:64});
+        this._tickScan(dt,flows);this._tickLateral(dt,flows);this._tickExfil(flows);this._processFlows(flows,dt);this._updateServiceHealth(dt);
+        const a=1-Math.exp(-dt/.65);for(const k in this._tickRates){this._ppsSmooth[k]+=(this._tickRates[k]-this._ppsSmooth[k])*a;this.stats.pps[k]=this._ppsSmooth[k];}
+        if(this.time>=this._nextConversation){this._scheduleBrowserSession();this._nextConversation=this.time+4.4+this.rand()*1.5;}this._drainScheduled();
+      }
+      _legitimateFlows(){
+        const f=[
+          {id:'legit_portal',class:'legit',src:'internet',dst:'web',proto:'tcp',dstPort:443,flags:'ACK',state:'ESTABLISHED',knownState:true,offeredPps:760,bytesPerPacket:940,serviceId:'portal'},
+          {id:'legit_dns',class:'legit',src:'internet',dst:'publicDns',proto:'udp',dstPort:53,flags:'',state:'NEW',knownState:false,offeredPps:220,bytesPerPacket:110,serviceId:'publicDns'},
+          {id:'legit_syn',class:'legit',src:'internet',dst:'web',proto:'tcp',dstPort:443,flags:'SYN',state:'NEW',knownState:false,offeredPps:34,bytesPerPacket:64,noVisual:true},
+          {id:'web_api',class:'legit',src:'web',dst:'app',proto:'tcp',dstPort:8443,flags:'ACK',state:'ESTABLISHED',knownState:true,offeredPps:510,bytesPerPacket:880,serviceId:'api'},
+          {id:'app_db',class:'legit',src:'app',dst:'db',proto:'tcp',dstPort:5432,flags:'ACK',state:'ESTABLISHED',knownState:true,offeredPps:430,bytesPerPacket:760,serviceId:'database'},
+          {id:'mail_flow',class:'legit',src:'internet',dst:'mail',proto:'tcp',dstPort:25,flags:'ACK',state:'ESTABLISHED',knownState:true,offeredPps:72,bytesPerPacket:640}
+        ];
+        for(const id of ['client1','client2','client3','client4','client5'])f.push({id:'auth_'+id,class:'legit',src:id,dst:'auth',proto:'tcp',dstPort:636,flags:'ACK',state:'ESTABLISHED',knownState:true,offeredPps:54,bytesPerPacket:430,serviceId:'auth'});
+        return f;
+      }
+      _tickScan(dt,flows){
+        if(!this._active('scan'))return;this.attack.scanClock-=dt;if(this.attack.scanClock>0)return;this.attack.scanClock+=2.05;const probe=SCAN_SEQUENCE[this.attack.scanIndex++%SCAN_SEQUENCE.length];
+        const result=this.mitigations.ips&&probe.result==='OPEN'?'IPS DROP':probe.result;flows.push({id:'scan_'+this.attack.scanIndex,class:'scan',src:'internet',dst:probe.target,proto:probe.proto.toLowerCase(),dstPort:probe.port,flags:probe.proto==='TCP'?'SYN':'',state:'NEW',knownState:false,offeredPps:90,bytesPerPacket:64,scanProbe:probe,noVisual:true});
+        this._emit({type:'scan_probe',probe:Object.assign({},probe,{result}),src:'internet'});
+      }
+      _startLateral(){const n=this.graph.nodes.get('client1');if(!n)return;n.infected=true;this.attack.infectedAt.client1=this.time;this._emit({type:'infect',node:'client1',source:'initial_access',label:'PATIENT ZERO'});}
+      _tickLateral(dt,flows){
+        if(!this._active('lateral'))return;this.attack.lateralClock-=dt;if(this.attack.lateralClock>0)return;this.attack.lateralClock+=1.35;const sources=[...this.graph.nodes.values()].filter(n=>n.infected&&!n.quarantined);if(!sources.length)return;
+        const src=sources[Math.floor(this.rand()*sources.length)],candidates=LATERAL_TARGETS.map(id=>this.graph.nodes.get(id)).filter(n=>n&&!n.infected&&!n.quarantined&&this.graph.route(src.id,n.id));if(!candidates.length)return;
+        const dst=candidates[Math.floor(this.rand()*candidates.length)],vector=LATERAL_PORTS[Math.floor(this.rand()*LATERAL_PORTS.length)];flows.push({id:'lateral_'+(++this.attack.attempt),class:'lateral',src:src.id,dst:dst.id,proto:'tcp',dstPort:vector.port,flags:'PSH',state:'NEW',knownState:false,offeredPps:160,bytesPerPacket:420,lateralAttempt:{src:src.id,dst:dst.id,vector}});
+      }
+      _tickExfil(flows){
+        if(!this._active('exfil'))return;const sources=[...this.graph.nodes.values()].filter(n=>n.infected&&!n.quarantined).sort((a,b)=>(this.attack.infectedAt[a.id]||0)-(this.attack.infectedAt[b.id]||0));if(!sources.length){this.attack.exfilContained=true;return;}
+        const p=this._progress('exfil'),pps=220+780*smoothstep(0,.45,p);flows.push({id:'exfil_stream',class:'exfil',src:sources[0].id,dst:'internet',proto:'tcp',dstPort:443,flags:'ACK',state:'ESTABLISHED',knownState:true,offeredPps:pps,bytesPerPacket:1250});
+      }
+      _isInboundSyn(f){return f.src==='internet'&&f.flags==='SYN'&&!f.knownState;}
+      _drop(f,reason,rate){rate=Math.min(f.rate,Math.max(0,rate));if(rate<=0)return;f.rate-=rate;f.drops[reason]=(f.drops[reason]||0)+rate;}
+      _processFlows(flows,dt){
+        for(const l of this.graph.links.values()){l.offered=0;l.utilization=0;}
+        for(const f of flows){f.route=this.graph.route(f.src,f.dst);f.rate=Math.max(0,f.offeredPps);f.drops=Object.create(null);if(f.serviceId){const m=this._serviceDelivery[f.serviceId]||(this._serviceDelivery[f.serviceId]={demand:0,delivered:0});m.demand+=f.offeredPps;}if(!f.route)this._drop(f,'no_route',f.rate);}
+        this.synBucket.refill(dt);if(this.mitigations.rateLimit){const syns=flows.filter(f=>f.route&&this._isInboundSyn(f)),demand=syns.reduce((n,f)=>n+f.rate*dt,0),fraction=this.synBucket.fraction(demand);for(const f of syns)this._drop(f,'rate_limit',f.rate*(1-fraction));}
+        for(const f of flows){if(!f.route||f.rate<=0)continue;const verdict=zonePolicy(f);if(!verdict.allow)this._drop(f,verdict.reason,f.rate);}
+        const newSyns=flows.filter(f=>f.route&&f.rate>0&&this._isInboundSyn(f)),used=this.firewall.halfOpenAttack+this.firewall.halfOpenLegit+this.firewall.established,available=Math.max(0,SECURITY.stateCapacity-used),demand=newSyns.reduce((n,f)=>n+f.rate*dt,0),stateFraction=demand?Math.min(1,available/demand):1;
+        for(const f of newSyns){this._drop(f,'state_table_full',f.rate*(1-stateFraction));const alloc=f.rate*dt;if(f.class==='syn'||f.class==='scan')this.firewall.halfOpenAttack+=alloc;else this.firewall.halfOpenLegit+=alloc;}
+        if(this.mitigations.ips){const inspected=flows.filter(f=>f.rate>0&&IPS_DETECTION[f.class]);const load=inspected.reduce((n,f)=>n+f.rate,0),capacityFactor=Math.min(1,SECURITY.ipsCapacity/Math.max(1,load));for(const f of inspected)this._drop(f,'ips',f.rate*(IPS_DETECTION[f.class]||0)*capacityFactor);}
+        for(const f of flows)if(f.route&&f.rate>0)for(const id of f.route.links)this.graph.links.get(id).offered+=f.rate;
+        for(const l of this.graph.links.values())l.utilization=l.offered/Math.max(1,l.capacity);
+        for(const f of flows){
+          let factor=1;if(f.route)for(const id of f.route.links){const l=this.graph.links.get(id);factor=Math.min(factor,Math.min(1,l.capacity/Math.max(1,l.offered)));}const delivered=f.rate*factor;if(f.rate>delivered)f.drops.congestion=(f.drops.congestion||0)+(f.rate-delivered);
+          const blocked=Math.max(0,f.offeredPps-delivered);this._tickRates.offered+=f.offeredPps;this._tickRates.allowed+=delivered;this._tickRates.blocked+=blocked;if(f.class==='legit')this._tickRates.legit+=delivered;else{this._tickRates.malicious+=delivered;if(f.class==='exfil')this._tickRates.exfil+=delivered;}
+          this.stats.totalAllowed+=delivered*dt;this.stats.totalBlocked+=blocked*dt;for(const [reason,rate] of Object.entries(f.drops)){this.stats.blockedBy[reason]=(this.stats.blockedBy[reason]||0)+rate*dt;}
+          if(f.serviceId)this._serviceDelivery[f.serviceId].delivered+=delivered;if(f.class==='exfil')this.stats.exfilBytes+=delivered*dt*f.bytesPerPacket;
+          if(f.lateralAttempt)this._resolveLateral(f,delivered);if(!f.noVisual)this._sampleVisual(f,delivered,dt);
+        }
+      }
+      _resolveLateral(f,delivered){const a=f.lateralAttempt;if(a.resolved)return;a.resolved=true;const target=this.graph.nodes.get(f.dst),chance=(target.vulnerable||.2)*Math.min(1,delivered/80);if(delivered>8&&this.rand()<chance){target.infected=true;this.attack.infectedAt[target.id]=this.time;this._emit({type:'infect',node:target.id,source:f.src,vector:a.vector});}else this._emit({type:'exploit_blocked',node:target.id,source:f.src,vector:a.vector});}
+      _pickDrop(drops){let best=null,max=0;for(const [k,v] of Object.entries(drops))if(v>max){best=k;max=v;}return best;}
+      _dropNode(f,reason){if(reason==='ips')return f.route?.nodes.includes('fw')?'fw':(f.route?.nodes.find(n=>['coreA','coreB','accessA','accessB','serverSw'].includes(n))||f.dst);if(reason==='congestion')return f.dst;if(reason==='no_route')return f.src;return'fw';}
+      _sampleVisual(f,delivered,dt){
+        let rate=f.class==='syn'?Math.min(145,10+34*Math.log10(1+f.offeredPps)):Math.min(48,3+12*Math.log10(1+f.offeredPps));rate*=this.visualQuality;const key=f.id.startsWith('scan_')?'scan':f.id;this._visualAcc[key]=(this._visualAcc[key]||0)+rate*dt;const count=Math.min(10,Math.floor(this._visualAcc[key]));this._visualAcc[key]-=count;if(!count||!f.route)return;
+        const ratio=f.offeredPps>0?delivered/f.offeredPps:0;for(let i=0;i<count;i++){const survives=this.rand()<ratio,reason=survives?null:this._pickDrop(f.drops);this._emit({type:'packet',class:f.class,src:f.src,dst:f.dst,route:f.route,willDrop:!survives,dropReason:reason,dropAt:this._dropNode(f,reason),jitter:this.rand()});}
+      }
+      _updateServiceHealth(dt){
+        const used=this.firewall.halfOpenAttack+this.firewall.halfOpenLegit+this.firewall.established,fill=Math.min(1,used/SECURITY.stateCapacity),tablePenalty=1-.88*smoothstep(.72,1,fill),target=Object.create(null);
+        for(const def of PS_SERVICES){const m=this._serviceDelivery[def.id]||{demand:1,delivered:0};let v=clamp(m.delivered/Math.max(1,m.demand));const n=this.graph.nodes.get(def.node);if(!n||!n.up||n.quarantined)v=0;if(n?.infected)v*=.28;if(def.id==='portal'||def.id==='publicDns')v*=tablePenalty;target[def.id]=v;}
+        for(const def of PS_SERVICES)for(const dep of def.dependencies)target[def.id]*=Math.sqrt(Math.max(0,target[dep]||0));let weighted=0,total=0;
+        for(const def of PS_SERVICES){const s=this.services[def.id],tau=target[def.id]*100<s.health?1.15:3.8;s.health+=(target[def.id]*100-s.health)*(1-Math.exp(-dt/tau));s.health=clamp(s.health,0,100);weighted+=s.health*def.weight;total+=def.weight;}
+        const availability=weighted/(100*total);this.score+=availability*100*dt;this.uptimeIntegral+=availability*dt;this.availabilityPct=100*this.uptimeIntegral/Math.max(.001,this.time);
+      }
+      _scheduleBrowserSession(){
+        const clients=['client1','client2','client3','client4','client5'].filter(id=>!this.graph.nodes.get(id).quarantined);if(!clients.length)return;const c=clients[Math.floor(this.rand()*clients.length)],base=this.time;
+        const add=(offset,src,dst,protocol,accent='cyan')=>this._scheduled.push({at:base+offset,src,dst,protocol,accent});
+        add(0,c,'publicDns','DNS QUERY');add(.22,'publicDns',c,'DNS RESPONSE','violet');add(.58,c,'web','TCP SYN');add(.76,'web',c,'TCP SYN-ACK');add(.92,c,'web','TCP ACK');add(1.18,c,'web','TLS CLIENT HELLO');add(1.39,'web',c,'TLS SERVER HELLO','violet');add(1.57,c,'web','TLS FINISHED');
+      }
+      _drainScheduled(){this._scheduled.sort((a,b)=>a.at-b.at);while(this._scheduled.length&&this._scheduled[0].at<=this.time){const p=this._scheduled.shift(),route=this.graph.route(p.src,p.dst);if(route)this._emit({type:'protocol_packet',class:'legit',src:p.src,dst:p.dst,route,protocol:p.protocol,accent:p.accent});}}
+      _waveTransitions(){
+        for(const w of PS_WAVES){if(this.time>=w.start&&!this.attack.started[w.id]){this.attack.started[w.id]=true;this._emit({type:'wave_start',wave:w});if(w.id==='lateral')this._startLateral();}if(this.time>=w.end&&!this.attack.ended[w.id]){this.attack.ended[w.id]=true;this._emit({type:'wave_end',wave:w});}}
+        if(this.time>=162&&!this.attack.complete){this.attack.complete=true;this._emit({type:'mission_complete',score:this.score,availability:this.availabilityPct});}
+      }
+      _emit(ev){ev.time=this.time;if(this.events.length>=600){const i=this.events.findIndex(x=>x.type==='packet');this.events.splice(i>=0?i:0,1);}this.events.push(ev);}
+      drainEvents(){const out=this.events;this.events=[];return out;}
+      setVisualQuality(v){this.visualQuality=clamp(v,.15,1);}
+      setRateLimit(on){on=!!on;if(this.mitigations.rateLimit===on)return;this.mitigations.rateLimit=on;this._emit({type:'mitigation',id:'rateLimit',enabled:on});}
+      setIPS(on){on=!!on;if(this.mitigations.ips===on)return;this.mitigations.ips=on;this._emit({type:'mitigation',id:'ips',enabled:on});}
+      _setLink(id,up){
+        const before=MONITORED_PATHS.map(pair=>({pair,route:this.graph.route(pair[0],pair[1])}));if(!this.graph.setLink(id,up))return false;this._emit({type:'link',id,up});for(const old of before){const next=this.graph.route(old.pair[0],old.pair[1]),a=old.route?.links.join('|')||'',b=next?.links.join('|')||'';if(a!==b)this._emit({type:'reroute',src:old.pair[0],dst:old.pair[1],oldRoute:old.route,newRoute:next});}return true;
+      }
+      toggleLink(id){const l=this.graph.links.get(id);return l?this._setLink(id,!l.up):false;}
+      restoreAll(){let n=0;for(const l of this.graph.links.values())if(!l.up){this._setLink(l.id,true);n++;}return n;}
+      toggleQuarantine(id){const n=this.graph.nodes.get(id);if(!n||!['client','server'].includes(n.type))return false;const on=!n.quarantined;if(!this.graph.setQuarantine(id,on))return false;this._emit({type:'quarantine',node:id,on,infected:n.infected});return true;}
+      snapshot(){const used=this.firewall.halfOpenAttack+this.firewall.halfOpenLegit+this.firewall.established;return{time:this.time,missionDuration:162,activeWaves:PS_WAVES.filter(w=>this.time>=w.start&&this.time<w.end).map(w=>w.id),pps:{...this.stats.pps},totalAllowed:Math.floor(this.stats.totalAllowed),totalBlocked:Math.floor(this.stats.totalBlocked),firewall:{used,capacity:SECURITY.stateCapacity,percent:100*Math.min(1,used/SECURITY.stateCapacity),halfOpen:this.firewall.halfOpenAttack+this.firewall.halfOpenLegit,established:this.firewall.established},services:PS_SERVICES.map(d=>({id:d.id,name:d.name,port:d.port,proto:d.proto,health:this.services[d.id].health})),links:[...this.graph.links.values()].map(l=>({id:l.id,up:l.up,utilization:l.utilization,cuttable:l.cuttable})),nodes:[...this.graph.nodes.values()].map(n=>({id:n.id,infected:n.infected,quarantined:n.quarantined,up:n.up})),mitigations:{...this.mitigations},score:Math.floor(this.score),availabilityPct:this.availabilityPct,exfilBytes:Math.floor(this.stats.exfilBytes),compromised:[...this.graph.nodes.values()].filter(n=>n.infected).length,missionComplete:this.attack.complete};}
+    }
+    const sim=new PacketStormSim();
+    applyQuality(3);
+
+    // ---------- HUD + PLAYER INTERACTIONS ----------
+    const serviceRows=new Map();
+    for(const s of PS_SERVICES){
+      const row=document.createElement('div');row.className='service';row.dataset.service=s.id;row.innerHTML=`<div class="service-port">${s.port}</div><div class="service-name"><span>${s.name}</span><span>${s.proto}</span></div><div class="service-bar"><i></i></div><div class="service-health">100%</div>`;$('services').append(row);serviceRows.set(s.id,row);
+    }
+    function feedEvent(title,copy,tone=''){
+      const e=document.createElement('div');e.className='event '+tone;const seconds=Math.floor(sim.time),stamp=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');e.innerHTML=`<span class="event-time">${stamp}</span><div class="event-copy"><b></b><span></span></div>`;e.querySelector('b').textContent=title;e.querySelector('span').textContent=copy;$('event-feed').append(e);while($('event-feed').children.length>8)$('event-feed').firstElementChild.remove();
+    }
+    function toast(message,tone=''){const e=document.createElement('div');e.className='toast '+tone;e.textContent=message;$('toast-stack').append(e);setTimeout(()=>e.remove(),3700);}
+    function showBanner(wave){$('banner-kicker').textContent=`THREAT ${String(wave.number).padStart(2,'0')} / KILL CHAIN`; $('banner-title').textContent=wave.short;$('banner-sub').textContent=wave.desc;$('wave-banner').classList.add('visible');setTimeout(()=>$('wave-banner').classList.remove('visible'),3600);}
+    function flashThreat(){const f=$('flash');f.classList.add('on');setTimeout(()=>f.classList.remove('on'),90);}
+
+    let sparkHistory=Array(52).fill(0),hudAccumulator=0,lastSnapshot=sim.snapshot();
+    function updateSpark(value){sparkHistory.push(value);sparkHistory.shift();const max=Math.max(200,...sparkHistory),pts=sparkHistory.map((v,i)=>[i/(sparkHistory.length-1)*200,35-clamp(v/max)*31]);const line='M'+pts.map(p=>p.map(n=>n.toFixed(1)).join(' ')).join(' L');$('spark-path').setAttribute('d',line);$('spark-fill').setAttribute('d',line+' L200 38 L0 38 Z');}
+    function updateHUD(snap){
+      lastSnapshot=snap;$('pps-in').textContent=fmt(snap.pps.offered);$('pps-out').textContent=fmt(snap.pps.allowed);$('allowed-count').textContent=fmt(snap.totalAllowed,6);$('blocked-count').textContent=fmt(snap.totalBlocked,6);updateSpark(snap.pps.offered);
+      const pct=clamp(snap.firewall.percent,0,100);$('conn-gauge').style.setProperty('--p',pct.toFixed(1));$('conn-value').textContent=Math.round(pct);$('conn-open').textContent=fmt(snap.firewall.halfOpen);const connState=pct>93?'EXHAUSTED':pct>74?'PRESSURE':'NOMINAL';$('conn-state').textContent=connState;$('conn-state').style.color=pct>93?'var(--red)':pct>74?'var(--amber)':'var(--green)';
+      $('score-value').textContent=fmt(snap.score,6);$('uptime-value').textContent=snap.availabilityPct.toFixed(2)+'%';$('uptime-value').classList.toggle('good',snap.availabilityPct>=90);$('uptime-value').style.color=snap.availabilityPct<70?'var(--red)':snap.availabilityPct<90?'var(--amber)':'';
+      for(const s of snap.services){const row=serviceRows.get(s.id),health=clamp(s.health,0,100);row.querySelector('.service-bar i').style.width=health.toFixed(1)+'%';row.querySelector('.service-health').textContent=Math.round(health)+'%';row.classList.toggle('degraded',health<80&&health>=40);row.classList.toggle('down',health<40);}
+      const active=PS_WAVES.filter(w=>snap.activeWaves.includes(w.id)),current=active.at(-1);if(current){$('wave-index').textContent=`WAVE ${current.number}/4`;$('wave-title').textContent=current.title;const p=clamp((snap.time-current.start)/(current.end-current.start));$('wave-progress').style.width=(p*100).toFixed(1)+'%';$('threat-level').textContent=current.number>2?'CRITICAL':'ELEVATED';$('threat-level').style.color='var(--red)';}else{$('wave-index').textContent=snap.time>156?'CHAIN / CLEAR':'WAVE 0/4';$('wave-title').textContent=snap.time>156?'Attack chain contained':'Baseline traffic';$('wave-progress').style.width='0%';$('threat-level').textContent='LOW';$('threat-level').style.color='';}
+      const remain=Math.max(0,162-snap.time);$('wave-clock').textContent=String(Math.floor(remain/60)).padStart(2,'0')+':'+String(Math.floor(remain%60)).padStart(2,'0');
+      document.querySelectorAll('.tactic').forEach(el=>{const w=PS_WAVES[Number(el.dataset.wave)-1];el.classList.toggle('active',snap.time>=w.start&&snap.time<w.end);el.classList.toggle('done',snap.time>=w.end);});
+      updateDefenseButtons();if(selected)refreshSelection();
+    }
+
+    function updateDefenseButtons(){const rate=sim.mitigations.rateLimit,ips=sim.mitigations.ips;$('rate-btn').classList.toggle('active',rate);$('ips-btn').classList.toggle('active',ips);$('rate-btn').setAttribute('aria-pressed',rate);$('ips-btn').setAttribute('aria-pressed',ips);}
+    function updateCameraButton(){$('camera-btn').style.color=cameraMode==='cinematic'?'var(--cyan)':'';$('camera-btn').title=cameraMode==='cinematic'?'Cinematic camera active':'Free orbit active';}
+    function updateAudioButton(){$('audio-btn').style.color=audioEngine.muted?'var(--red)':'';$('audio-btn').title=audioEngine.muted?'Enable audio':'Mute audio';}
+
+    let selected=null,cutMode=false;
+    function selectEntity(type,id){selected={type,id};refreshSelection();$('selection-card').classList.add('visible');}
+    function clearSelection(){selected=null;$('selection-card').classList.remove('visible');}
+    function refreshSelection(){
+      if(!selected)return;const action=$('selection-action');if(selected.type==='node'){const def=nodeDef.get(selected.id),n=sim.graph.nodes.get(selected.id);if(!def||!n)return clearSelection();$('selection-type').textContent=def.type.toUpperCase()+' / '+def.id.toUpperCase();$('selection-name').textContent=def.label;$('selection-zone').textContent=def.zone.toUpperCase();const state=n.quarantined?(n.infected?'ISOLATED / INFECTED':'QUARANTINED'):n.infected?'COMPROMISED':n.up?'HEALTHY':'OFFLINE';$('selection-state').textContent=state;$('selection-state').style.color=n.infected&&!n.quarantined?'var(--red)':n.quarantined?'var(--amber)':'var(--green)';const host=['client','server'].includes(def.type);action.disabled=!host;action.textContent=n.quarantined?'RESTORE HOST':'QUARANTINE HOST';}
+      else{const l=sim.graph.links.get(selected.id);if(!l)return clearSelection();$('selection-type').textContent='TOPOLOGY LINK';$('selection-name').textContent=nodeDef.get(l.src).label+' ↔ '+nodeDef.get(l.dst).label;$('selection-zone').textContent='ROUTED PATH';$('selection-state').textContent=l.up?'UP':'CUT';$('selection-state').style.color=l.up?'var(--green)':'var(--red)';action.disabled=!l.cuttable;action.textContent=l.up?'CUT SELECTED LINK':'RESTORE SELECTED LINK';}
+    }
+
+    function spawnVisualPacket(ev){
+      let route=ev.willDrop?routeUntil(ev.route,ev.dropAt):ev.route,path=visualPath(route);if(!path||path.total<=0)return;let kind=ev.class==='exfil'?'exfil':ev.class==='legit'?'legit':'malicious';if(ev.accent==='violet')kind='inspected';if(ev.dropReason==='ips')kind=ev.class==='exfil'?'exfil':'inspected';const pool=packetPools[kind],cap=kind==='legit'?QUALITY[quality].legit:kind==='malicious'?QUALITY[quality].bad:pool.max;if(pool.live>=cap)return;
+      const worldSpeed=ev.class==='syn'?20:ev.class==='exfil'?8:ev.type==='protocol_packet'?13:ev.class==='legit'?10:15,effect=ev.willDrop?(ev.dropReason==='ips'?'ips':'drop'):'';pool.spawn({path,speed:worldSpeed/path.total,phase:(ev.jitter||Math.random())*8,scale:ev.type==='protocol_packet'?1.2:ev.class==='syn'?.78:ev.class==='exfil'?1.25:1,effect,target:ev.dropAt||''});
+    }
+    let renderTime=0;
+    function handleSimEvent(ev){
+      if(ev.type==='packet'||ev.type==='protocol_packet')return spawnVisualPacket(ev);
+      if(ev.type==='wave_start'){showBanner(ev.wave);feedEvent('ATTACK WAVE DETECTED',ev.wave.title,'danger');toast(ev.wave.title+' — defensive action required','danger');screenShake.add(prefersReducedMotion?.08:.5);flashThreat();audioEngine.stinger();ringFX.spawn(nodeFxPos('internet'),0xff3156,1.05,'vertical');ringFX.spawn(nodeFxPos('internet'),0xff3156,1.35,'vertical');if(cameraMode==='cinematic')cameraDirector.play(ev.wave.shot,1.65);}
+      else if(ev.type==='wave_end'){feedEvent('ATTACK STAGE SUBSIDING',ev.wave.short+' traffic signature decaying','good');audioEngine.success();}
+      else if(ev.type==='scan_probe'){const p=ev.probe,color=p.result==='OPEN'?0xff3156:p.result==='IPS DROP'?0xa960ff:0x287a98;ringFX.spawn(nodeFxPos(p.target),color,.72,'horizontal');feedEvent(`${p.proto}/${p.port} ${p.result}`,`${p.service} probe → ${nodeDef.get(p.target).label}`,p.result==='OPEN'?'warn':p.result==='IPS DROP'?'good':'');}
+      else if(ev.type==='infect'){setNodeState(ev.node,'infected');ringFX.spawn(nodeFxPos(ev.node),0xff3156,1,'horizontal');feedEvent(ev.label||'ENDPOINT COMPROMISED',`${nodeDef.get(ev.node).label} via ${ev.vector?.label||ev.source}`,'danger');toast(`${nodeDef.get(ev.node).label} COMPROMISED — select host to quarantine`,'danger');audioEngine.alert();screenShake.add(.18);}
+      else if(ev.type==='exploit_blocked'){ringFX.spawn(nodeFxPos(ev.node),0xa960ff,.48,'vertical');zapFX.spawn(nodeFxPos(ev.source),nodeFxPos(ev.node));feedEvent('EXPLOIT ATTEMPT BLOCKED',`${ev.vector.label}/${ev.vector.port} toward ${nodeDef.get(ev.node).label}`,'good');audioEngine.zap(true);}
+      else if(ev.type==='mitigation'){const name=ev.id==='rateLimit'?'SYN RATE POLICY':'INLINE IPS';feedEvent(name+(ev.enabled?' ENABLED':' DISABLED'),ev.enabled?(ev.id==='rateLimit'?'Token bucket 650 pps / burst 1,100':'North/south + east/west inspection'):'Control returned to monitor mode',ev.enabled?'good':'warn');toast(name+(ev.enabled?' ONLINE':' OFFLINE'),ev.enabled?'good':'');ringFX.spawn(nodeFxPos('fw'),ev.enabled?0x38ffb5:0xffb02e,.75,'vertical');audioEngine.click();}
+      else if(ev.type==='link'){setLinkVisual(ev.id,ev.up?'up':'down');const l=sim.graph.links.get(ev.id);feedEvent(ev.up?'LINK RESTORED':'LINK ADMIN DOWN',`${nodeDef.get(l.src).label} ↔ ${nodeDef.get(l.dst).label}`,ev.up?'good':'danger');toast(ev.up?'Link restored — routes recomputed':'Link cut — recomputing shortest paths',ev.up?'good':'danger');if(!ev.up)screenShake.add(.14);}
+      else if(ev.type==='reroute'){if(ev.newRoute){for(const id of ev.newRoute.links){const l=linkViews.get(id);l.rerouteUntil=renderTime+1.8;setLinkVisual(id,'reroute');}feedEvent('ROUTE RECOMPUTED',`${nodeDef.get(ev.src).label} → ${nodeDef.get(ev.dst).label} via ${ev.newRoute.links.length} links`,'good');}else feedEvent('NO ALTERNATE PATH',`${nodeDef.get(ev.src).label} → ${nodeDef.get(ev.dst).label}`,'danger');}
+      else if(ev.type==='quarantine'){setNodeState(ev.node,ev.on?'quarantined':sim.graph.nodes.get(ev.node).infected?'infected':'healthy');ringFX.spawn(nodeFxPos(ev.node),ev.on?0xa960ff:0x38ffb5,.9,'vertical');feedEvent(ev.on?'HOST QUARANTINED':'HOST RESTORED',`${nodeDef.get(ev.node).label} ${ev.on?'removed from forwarding graph':'rejoined access network'}`,ev.on?'good':'warn');toast(`${nodeDef.get(ev.node).label} ${ev.on?'isolated':'restored'}`,ev.on?'good':'');audioEngine.success();}
+      else if(ev.type==='mission_complete')finishMission();
+    }
+
+    function finishMission(){if(ended)return;ended=true;gameRunning=false;const snap=sim.snapshot();$('end-score').textContent=fmt(snap.score,6);$('end-uptime').textContent=snap.availabilityPct.toFixed(1)+'%';$('end-blocked').textContent=fmt(snap.totalBlocked);$('end-exfil').textContent=(snap.exfilBytes/1048576).toFixed(1)+' MB';$('end-screen').classList.add('visible');feedEvent('INCIDENT CONTAINED','Attack chain ended; legitimate services remain under observation','good');audioEngine.success();}
+
+    function toggleRate(){audioEngine.init();sim.setRateLimit(!sim.mitigations.rateLimit);}
+    function toggleIPS(){audioEngine.init();sim.setIPS(!sim.mitigations.ips);}
+    function toggleCutMode(){cutMode=!cutMode;$('cut-btn').classList.toggle('active',cutMode);$('cut-btn').setAttribute('aria-pressed',cutMode);toast(cutMode?'CUT MODE — select a glowing topology link':'CUT MODE CANCELLED',cutMode?'danger':'');}
+    function restoreLinks(){audioEngine.init();const n=sim.restoreAll();if(!n)toast('All topology links are already operational');cutMode=false;$('cut-btn').classList.remove('active');}
+    function toggleCamera(){cameraMode=cameraMode==='cinematic'?'free':'cinematic';if(cameraMode==='cinematic')cameraDirector.play('overview',1.5);else cameraDirector.cancel();updateCameraButton();audioEngine.click();}
+    function toggleAudio(){audioEngine.init();audioEngine.toggle();updateAudioButton();}
+
+    $('rate-btn').addEventListener('click',toggleRate);$('ips-btn').addEventListener('click',toggleIPS);$('cut-btn').addEventListener('click',toggleCutMode);$('restore-btn').addEventListener('click',restoreLinks);$('camera-btn').addEventListener('click',toggleCamera);$('audio-btn').addEventListener('click',toggleAudio);$('selection-close').addEventListener('click',clearSelection);
+    $('selection-action').addEventListener('click',()=>{if(!selected)return;audioEngine.init();if(selected.type==='node')sim.toggleQuarantine(selected.id);else sim.toggleLink(selected.id);refreshSelection();});
+
+    const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();let pointerStart=null,hoverDirty=false;
+    function pointerNdc(e){const r=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-r.left)/r.width)*2-1;pointer.y=-((e.clientY-r.top)/r.height)*2+1;}
+    function pick(){raycaster.setFromCamera(pointer,camera);return raycaster.intersectObjects([...nodePickers,...linkPickers],false)[0]?.object?.userData||null;}
+    renderer.domElement.addEventListener('pointerdown',e=>{pointerStart={x:e.clientX,y:e.clientY};});
+    renderer.domElement.addEventListener('pointermove',e=>{pointerNdc(e);hoverDirty=true;});
+    renderer.domElement.addEventListener('pointerup',e=>{if(!pointerStart)return;const moved=Math.hypot(e.clientX-pointerStart.x,e.clientY-pointerStart.y);pointerStart=null;if(moved>6)return;pointerNdc(e);const hit=pick();if(!hit)return clearSelection();if(cutMode){if(hit.entityType==='link'){const l=sim.graph.links.get(hit.id);if(l.cuttable){sim.toggleLink(hit.id);cutMode=false;$('cut-btn').classList.remove('active');}else toast('Provider edge link is protected from manual shutdown');}else toast('CUT MODE — select a topology link','danger');return;}selectEntity(hit.entityType,hit.id);});
+
+    addEventListener('keydown',e=>{if(e.repeat)return;if(e.code==='Digit1')toggleRate();else if(e.code==='Digit2')toggleIPS();else if(e.code==='Digit3')toggleCutMode();else if(e.code==='Digit4')restoreLinks();else if(e.code==='KeyC')toggleCamera();else if(e.code==='KeyM')toggleAudio();else if(e.code==='KeyQ'&&selected?.type==='node')sim.toggleQuarantine(selected.id);else if(e.code==='Escape'){cutMode=false;$('cut-btn').classList.remove('active');clearSelection();}});
+
+    function resetGame(){sim.reset();for(const p of Object.values(packetPools))p.clear();for(const l of PS_LINKS)setLinkVisual(l.id,'up');for(const n of PS_NODES)setNodeState(n.id,'healthy');$('event-feed').replaceChildren();$('end-screen').classList.remove('visible');ended=false;gameRunning=true;cutMode=false;clearSelection();sparkHistory=Array(52).fill(0);feedEvent('NETWORK BASELINE ACQUIRED','DNS, TCP and TLS telemetry within normal thresholds','good');feedEvent('DEFENSE CONSOLE READY','Four-stage attack chain expected in T−12 seconds','warn');cameraMode='cinematic';cameraDirector.play('overview',1.8);updateCameraButton();updateDefenseButtons();updateHUD(sim.snapshot());}
+    let gameRunning=false,ended=false;
+    $('start-btn').addEventListener('click',()=>{audioEngine.init();$('boot').classList.add('hidden');resetGame();});
+    $('restart-btn').addEventListener('click',resetGame);
+
+    updateCameraButton();updateAudioButton();updateHUD(sim.snapshot());feedEvent('AEGIS SENSOR GRID ONLINE','Select Initialize Defense to enter live-fire mode','good');
+
+    // ---------- UNIFIED FRAME LOOP ----------
+    let lastFrame=performance.now(),attackIntensity=0;
+    function frame(now){
+      requestAnimationFrame(frame);const dt=Math.min(.05,Math.max(.001,(now-lastFrame)/1000));lastFrame=now;renderTime+=dt;
+      if(gameRunning){sim.update(dt);for(const ev of sim.drainEvents())handleSimEvent(ev);hudAccumulator+=dt;if(hudAccumulator>.12){hudAccumulator=0;updateHUD(sim.snapshot());}}
+      const active=lastSnapshot.activeWaves||[],targetAttack=active.length?Math.min(1,.42+active.length*.22):0;attackIntensity+= (targetAttack-attackIntensity)*(1-Math.exp(-dt*2.2));
+      setZoneThreat('outside',active.includes('syn')?.95:active.includes('scan')?.55:0);setZoneThreat('dmz',active.includes('scan')?.6:active.includes('syn')?.25:0);setZoneThreat('inside',active.includes('lateral')?.85:active.includes('exfil')?.65:0);
+      animateWorld(renderTime,dt,attackIntensity);if(hoverDirty){const hit=pick();renderer.domElement.style.cursor=hit?'pointer':'grab';hoverDirty=false;}
+      controls.enabled=!cameraDirector.active;controls.autoRotate=cameraMode==='cinematic'&&!cameraDirector.active&&!prefersReducedMotion;controls.autoRotateSpeed=.18;cameraDirector.update(dt);controls.update();const shaken=screenShake.apply(renderTime);composer.render();if(shaken)screenShake.restore(dt);samplePerformance(dt);
+    }
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
